@@ -1,14 +1,15 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
-import axios from "axios";
+import { get, post } from "@toruslabs/http-helpers";
+import assert from "assert";
 import BN from "bn.js";
+import * as fetch from "node-fetch";
 
-import { ecCurve, generatePolynomial, getShare, hexPoint, RSSClient } from "../src";
+import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex, RSSClient } from "../src";
+(globalThis as any).fetch = fetch;
 
 describe("RSS Client", function () {
   it("#should return correct values", async function () {
-    const ff = new BN(generatePrivate());
-    // const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
-    const factorKeys = [ff, ff];
+    const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
     const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
     const serverEndpoints = [
       "http://localhost:7071",
@@ -25,12 +26,12 @@ describe("RSS Client", function () {
     }
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return axios.post(`${endpoint}/private_key`, { private_key: serverPrivKeys[i] });
+        return post(`${endpoint}/private_key`, { private_key: serverPrivKeys[i] });
       })
     );
     const serverPubKeys = await Promise.all(
       serverEndpoints.map((endpoint) => {
-        return axios.get(`${endpoint}/public_key`).then((a) => a.data);
+        return get<PointHex>(`${endpoint}/public_key`);
       })
     );
     const serverThreshold = 3;
@@ -44,7 +45,7 @@ describe("RSS Client", function () {
     // set tssShares on servers
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return axios.post(`${endpoint}/tss_share`, {
+        return post(`${endpoint}/tss_share`, {
           label: "test",
           tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
         });
@@ -57,7 +58,7 @@ describe("RSS Client", function () {
     const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv);
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return axios.post(`${endpoint}/tss_share`, {
+        return post(`${endpoint}/tss_share`, {
           label: "test%2",
           tss_share_hex: getShare(serverPoly2, i + 1).toString(16, 64),
         });
@@ -70,13 +71,14 @@ describe("RSS Client", function () {
       serverThreshold,
       tssPubKey: hexPoint(tssPubKey),
     });
+    const targetIndexes = [2, 3];
     const refreshed = await rssClient.refresh({
       dkgNewPub: hexPoint(dkg2Pub),
       inputIndex,
       inputShare: tss2,
       selectedServers: [1, 2, 3],
       factorPubs,
-      targetIndexes: [2, 2],
+      targetIndexes,
       vid1: "test",
       vid2: "test%2",
       vidSigs: [],
@@ -92,8 +94,21 @@ describe("RSS Client", function () {
       )
     );
 
-    // eslint-disable-next-line no-console
-    console.log(recovered);
+    const factorShares = recovered.map((r) => r.factorShare);
+
+    // check that shares are valid
+
+    targetIndexes.map((target, i) => {
+      const interpolationLCs = [1, target].map((a) => getLagrangeCoeffs([1, target], a));
+
+      const shares = [dkg2Priv, factorShares[i]];
+
+      const _tssPrivKey = dotProduct(interpolationLCs, shares).umod(ecCurve.n);
+
+      assert.equal(_tssPrivKey.toString(16, 64), tssPrivKey.toString(16, 64));
+
+      return null;
+    });
 
     return true;
   });

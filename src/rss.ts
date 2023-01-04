@@ -1,5 +1,5 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
-import axios from "axios";
+import { post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
 
 import {
@@ -41,6 +41,29 @@ export type RefreshOptions = {
   targetIndexes: number[];
   selectedServers: number[];
   factorPubs: PointHex[];
+};
+
+export type RSSRound1ResponseData = {
+  master_poly_commits: PointHex[];
+  server_poly_commits: PointHex[];
+  target_encryptions: {
+    user_enc: EncryptedMessage;
+    server_encs: EncryptedMessage[];
+  };
+};
+
+export type RSSRound1Response = {
+  target_index: number[];
+  data: RSSRound1ResponseData[];
+};
+
+type RSSRound2ResponseData = {
+  encs: EncryptedMessage[];
+};
+
+type RSSRound2Response = {
+  target_index: number[];
+  data: RSSRound2ResponseData[];
 };
 
 export type ServerFactorEnc = {
@@ -105,10 +128,27 @@ export class RSSClient {
     const rssRound1Proms = selectedServers
       .map((ind) => {
         const serverEndpoint = this.serverEndpoints[ind - 1];
-        return axios
-          .post(`${serverEndpoint}/rss_round_1`, {
+        return post<RSSRound1Response>(`${serverEndpoint}/rss_round_1`, {
+          round_name: "rss_round_1",
+          server_set: "old",
+          server_index: ind,
+          old_servers_info: serversInfo,
+          new_servers_info: serversInfo,
+          old_user_share_index: inputIndex,
+          user_temp_pubkey: hexPoint(this.tempPubKey),
+          target_index: targetIndexes,
+          auth: {
+            vid: vid1,
+            vidSigs,
+          },
+        });
+      })
+      .concat(
+        selectedServers.map((ind) => {
+          const serverEndpoint = this.serverEndpoints[ind - 1];
+          return post<RSSRound1Response>(`${serverEndpoint}/rss_round_1`, {
             round_name: "rss_round_1",
-            server_set: "old",
+            server_set: "new",
             server_index: ind,
             old_servers_info: serversInfo,
             new_servers_info: serversInfo,
@@ -116,31 +156,10 @@ export class RSSClient {
             user_temp_pubkey: hexPoint(this.tempPubKey),
             target_index: targetIndexes,
             auth: {
-              vid: vid1,
+              vid: vid2, // TODO: undesigned
               vidSigs,
             },
-          })
-          .then((a) => a.data);
-      })
-      .concat(
-        selectedServers.map((ind) => {
-          const serverEndpoint = this.serverEndpoints[ind - 1];
-          return axios
-            .post(`${serverEndpoint}/rss_round_1`, {
-              round_name: "rss_round_1",
-              server_set: "new",
-              server_index: ind,
-              old_servers_info: serversInfo,
-              new_servers_info: serversInfo,
-              old_user_share_index: inputIndex,
-              user_temp_pubkey: hexPoint(this.tempPubKey),
-              target_index: targetIndexes,
-              auth: {
-                vid: vid2, // TODO: undesigned
-                vidSigs,
-              },
-            })
-            .then((a) => a.data);
+          });
         })
       );
 
@@ -209,7 +228,7 @@ export class RSSClient {
     rssRound1Proms.push(
       new Promise((resolve) => {
         resolve({
-          targetIndexes,
+          target_index: targetIndexes,
           data: _data,
         });
       })
@@ -327,14 +346,12 @@ export class RSSClient {
           return null;
         });
         const serverEndpoint = this.serverEndpoints[ind - 1];
-        return axios
-          .post(`${serverEndpoint}/rss_round_2`, {
-            round_name: "rss_round_2",
-            server_index: ind,
-            target_index: targetIndexes,
-            data,
-          })
-          .then((a) => a.data);
+        return post<RSSRound2Response>(`${serverEndpoint}/rss_round_2`, {
+          round_name: "rss_round_2",
+          server_index: ind,
+          target_index: targetIndexes,
+          data,
+        });
       })
     );
 
