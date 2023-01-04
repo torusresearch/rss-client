@@ -1,10 +1,11 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
-import { get, post } from "@toruslabs/http-helpers";
+import { post } from "@toruslabs/http-helpers";
 import assert from "assert";
 import BN from "bn.js";
+import log from "loglevel";
 import * as fetch from "node-fetch";
 
-import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex, RSSClient } from "../src";
+import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, RSSClient } from "../src";
 (globalThis as any).fetch = fetch;
 
 describe("RSS Client", function () {
@@ -24,16 +25,17 @@ describe("RSS Client", function () {
     for (let i = 0; i < serverCount; i++) {
       serverPrivKeys.push(new BN(generatePrivate()));
     }
+    const serverPubKeys = serverPrivKeys.map((privKey) => hexPoint(ecCurve.g.mul(privKey)));
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return post(`${endpoint}/private_key`, { private_key: serverPrivKeys[i] });
+        return post(`${endpoint}/private_key`, { private_key: serverPrivKeys[i] }).catch((e) => log.error(e));
       })
     );
-    const serverPubKeys = await Promise.all(
-      serverEndpoints.map((endpoint) => {
-        return get<PointHex>(`${endpoint}/public_key`);
-      })
-    );
+    // const serverPubKeys = await Promise.all(
+    //   serverEndpoints.map((endpoint) => {
+    //     return get<PointHex>(`${endpoint}/public_key`);
+    //   })
+    // );
     const serverThreshold = 3;
     const inputIndex = 2;
     const tssPrivKey = new BN(generatePrivate());
@@ -48,7 +50,7 @@ describe("RSS Client", function () {
         return post(`${endpoint}/tss_share`, {
           label: "test",
           tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
-        });
+        }).catch((e) => log.error(e));
       })
     );
 
@@ -61,7 +63,7 @@ describe("RSS Client", function () {
         return post(`${endpoint}/tss_share`, {
           label: "test%2",
           tss_share_hex: getShare(serverPoly2, i + 1).toString(16, 64),
-        });
+        }).catch((e) => log.error(e));
       })
     );
 
@@ -90,6 +92,7 @@ describe("RSS Client", function () {
           factorKey: factorKeys[i],
           serverEncs: r.serverFactorEncs,
           userEnc: r.userFactorEnc,
+          selectedServers: [1, 2, 3],
         })
       )
     );

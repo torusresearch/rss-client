@@ -1,6 +1,7 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
 import { post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
+import log from "loglevel";
 
 import {
   decrypt,
@@ -14,7 +15,6 @@ import {
   getShare,
   hexPoint,
   PointHex,
-  randomSelection,
 } from "./utils";
 
 export type RSSClientOptions = {
@@ -82,6 +82,7 @@ export type RecoverOptions = {
   factorKey: BN;
   serverEncs: EncryptedMessage[];
   userEnc: EncryptedMessage;
+  selectedServers: number[];
 };
 
 export type RecoverResponse = {
@@ -351,7 +352,7 @@ export class RSSClient {
           server_index: ind,
           target_index: targetIndexes,
           data,
-        });
+        }).catch((e) => log.error(e));
       })
     );
 
@@ -360,7 +361,7 @@ export class RSSClient {
       factorEncs.push({
         targetIndex: targetIndexes[i],
         factorPub: factorPubs[i],
-        serverFactorEncs: serverFactorEncs.map((s) => s.data[i].encs[0]),
+        serverFactorEncs: serverFactorEncs.map((s) => s && s.data[i].encs[0]),
         userFactorEnc: userFactorEncs[i],
       });
     }
@@ -369,15 +370,14 @@ export class RSSClient {
   }
 
   async recover(opts: RecoverOptions): Promise<RecoverResponse> {
-    const { factorKey, serverEncs, userEnc } = opts;
+    const { factorKey, serverEncs, userEnc, selectedServers } = opts;
     const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
     const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
-    const prom2 = Promise.all(serverEncs.map((serverEnc) => decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
+    const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
     const [decryptedUserEnc, decryptedServerEncs] = await Promise.all([prom1, prom2]);
     // use threshold number of factor encryptions from the servers to interpolate server share
-    const decryptedSelection = randomSelection([1, 2, 3, 4, 5], this.serverThreshold).sort();
-    const someDecrypted = decryptedServerEncs.filter((_, j) => decryptedSelection.indexOf(j + 1) >= 0);
-    const decryptedLCs = decryptedSelection.map((index) => getLagrangeCoeffs(decryptedSelection, index));
+    const someDecrypted = decryptedServerEncs.filter((_, j) => selectedServers.indexOf(j + 1) >= 0);
+    const decryptedLCs = selectedServers.map((index) => getLagrangeCoeffs(selectedServers, index));
     const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
     const serverReconstructed = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
     const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 2], 1));
