@@ -73,12 +73,25 @@ describe("RSS Client", function () {
       inputIndex,
       inputShare: tss2,
       selectedServers: [1, 2, 3],
-      targetIndexes: [2, 2],
+      factorPubs,
+      targetIndexes: [2],
       vid1: "test",
       vid2: "test%2",
       vidSigs: [],
-      factorPubs,
     });
+
+    const recovered = await Promise.all(
+      refreshResponse.map((r, i) =>
+        rssClient.recover({
+          factorKey: factorKeys[i],
+          serverEncs: r.serverFactorEncs,
+          userEnc: r.userFactorEnc,
+        })
+      )
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(recovered);
 
     return true;
   });

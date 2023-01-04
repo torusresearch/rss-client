@@ -2,7 +2,20 @@ import { generatePrivate } from "@toruslabs/eccrypto";
 import axios from "axios";
 import BN from "bn.js";
 
-import { decrypt, ecCurve, ecPoint, encrypt, EncryptedMessage, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
+import {
+  decrypt,
+  dotProduct,
+  ecCurve,
+  ecPoint,
+  encrypt,
+  EncryptedMessage,
+  generatePolynomial,
+  getLagrangeCoeffs,
+  getShare,
+  hexPoint,
+  PointHex,
+  randomSelection,
+} from "./utils";
 
 export type RSSClientOptions = {
   tssPubKey: PointHex;
@@ -325,7 +338,7 @@ export class RSSClient {
     );
 
     const factorEncs: RefreshResponse[] = [];
-    for (let i = 0; i < factorPubs.length; i++) {
+    for (let i = 0; i < targetIndexes.length; i++) {
       factorEncs.push({
         targetIndex: targetIndexes[i],
         factorPub: factorPubs[i],
@@ -337,8 +350,20 @@ export class RSSClient {
     return factorEncs;
   }
 
-  // async recover(opts: RecoverOptions): Promise<RecoverResponse> {
-  //   const { factorKey, serverEncs, userEnc } = opts;
+  async recover(opts: RecoverOptions): Promise<RecoverResponse> {
+    const { factorKey, serverEncs, userEnc } = opts;
+    const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
+    const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
+    const prom2 = Promise.all(serverEncs.map((serverEnc) => decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
+    const [decryptedUserEnc, decryptedServerEncs] = await Promise.all([prom1, prom2]);
+    // use threshold number of factor encryptions from the servers to interpolate server share
+    const decryptedSelection = randomSelection([1, 2, 3, 4, 5], this.serverThreshold).sort();
+    const someDecrypted = decryptedServerEncs.filter((_, j) => decryptedSelection.indexOf(j + 1) >= 0);
+    const decryptedLCs = decryptedSelection.map((index) => getLagrangeCoeffs(decryptedSelection, index));
+    const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
+    const temp2 = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
+    const factorShare = temp1.add(temp2).umod(ecCurve.n);
 
-  // }
+    return { factorShare };
+  }
 }
