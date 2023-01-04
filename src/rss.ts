@@ -1,17 +1,8 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
 import axios from "axios";
 import BN from "bn.js";
-import { ec as EC } from "elliptic";
 
-import { decrypt, ecPoint, encrypt, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint } from "./utils";
-
-const ec = new EC("secp256k1");
-export const ecCurve = ec;
-
-export type PointHex = {
-  x: string | null;
-  y: string | null;
-};
+import { decrypt, ecCurve, ecPoint, encrypt, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
 
 export type RSSClientOptions = {
   tssPubKey: PointHex;
