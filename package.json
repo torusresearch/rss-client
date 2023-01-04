@@ -25,9 +25,11 @@
   },
   "dependencies": {
     "@toruslabs/eccrypto": "^1.1.8",
-    "axios": "^1.2.2",
+    "@toruslabs/http-helpers": "^3.2.0",
     "bn.js": "^5.2.1",
     "elliptic": "^6.5.4",
+    "fetch": "^1.1.0",
+    "node-fetch": "^2.0.0",
     "web3-eth-contract": "^1.8.1",
     "web3-utils": "^1.8.1"
   },
@@ -39,6 +41,7 @@
     "@types/mocha": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^5.43.0",
     "@typescript-eslint/parser": "^5.43.0",
+    "assert": "^2.0.0",
     "cross-env": "^7.0.3",
     "dotenv": "^16.0.3",
     "eslint": "^8.28.0",
