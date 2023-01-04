@@ -94,6 +94,7 @@ export class RSSClient {
 
   async refresh(opts: RefreshOptions): Promise<RefreshResponse[]> {
     const { targetIndexes, inputIndex, selectedServers, vid1, vid2, vidSigs, dkgNewPub, inputShare, factorPubs } = opts;
+    if (factorPubs.length !== targetIndexes.length) throw new Error("inconsistent factorPubs and targetIndexes lengths");
     const serversInfo: ServersInfo = {
       pubkeys: this.serverPubKeys,
       selected: selectedServers,
@@ -361,7 +362,8 @@ export class RSSClient {
     const someDecrypted = decryptedServerEncs.filter((_, j) => decryptedSelection.indexOf(j + 1) >= 0);
     const decryptedLCs = decryptedSelection.map((index) => getLagrangeCoeffs(decryptedSelection, index));
     const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
-    const temp2 = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
+    const serverReconstructed = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
+    const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 2], 1));
     const factorShare = temp1.add(temp2).umod(ecCurve.n);
 
     return { factorShare };

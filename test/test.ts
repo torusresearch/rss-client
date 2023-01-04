@@ -6,7 +6,9 @@ import { ecCurve, generatePolynomial, getShare, hexPoint, RSSClient } from "../s
 
 describe("RSS Client", function () {
   it("#should return correct values", async function () {
-    const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
+    const ff = new BN(generatePrivate());
+    // const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
+    const factorKeys = [ff, ff];
     const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
     const serverEndpoints = [
       "http://localhost:7071",
@@ -74,7 +76,7 @@ describe("RSS Client", function () {
       inputShare: tss2,
       selectedServers: [1, 2, 3],
       factorPubs,
-      targetIndexes: [2],
+      targetIndexes: [2, 2],
       vid1: "test",
       vid2: "test%2",
       vidSigs: [],
