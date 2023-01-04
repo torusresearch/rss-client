@@ -2,7 +2,7 @@ import { generatePrivate } from "@toruslabs/eccrypto";
 import axios from "axios";
 import BN from "bn.js";
 
-import { decrypt, ecCurve, ecPoint, encrypt, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
+import { decrypt, ecCurve, ecPoint, encrypt, EncryptedMessage, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
 
 export type RSSClientOptions = {
   tssPubKey: PointHex;
@@ -22,17 +22,38 @@ export type RefreshOptions = {
   vid1: string;
   vid2: string;
   vidSigs: any[];
-  dkg2Pub: PointHex;
+  dkgNewPub: PointHex;
   inputShare: BN;
   inputIndex: number;
   targetIndexes: number[];
   selectedServers: number[];
+  factorPubs: PointHex[];
+};
+
+export type ServerFactorEnc = {
+  data: EncryptedMessage[][];
+  target_index: number[];
+};
+
+export type RefreshResponse = {
+  targetIndex: number;
+  factorPub: PointHex;
+  serverFactorEncs: EncryptedMessage[];
+  userFactorEnc: EncryptedMessage;
+};
+
+export type RecoverOptions = {
+  factorKey: BN;
+  serverEncs: EncryptedMessage[];
+  userEnc: EncryptedMessage;
+};
+
+export type RecoverResponse = {
+  factorShare: BN;
 };
 
 export class RSSClient {
   tssPubKey: PointHex;
-
-  factorPubs: PointHex[];
 
   tempPrivKey: BN;
 
@@ -53,13 +74,13 @@ export class RSSClient {
       this.tempPrivKey = opts.tempKey;
       this.tempPubKey = ecCurve.g.mul(opts.tempKey);
     } else {
-      const tempPrivKey = new BN(generatePrivate());
-      this.tempPubKey = ecCurve.g.mul(tempPrivKey);
+      this.tempPrivKey = new BN(generatePrivate());
+      this.tempPubKey = ecCurve.g.mul(this.tempPrivKey);
     }
   }
 
-  async refresh(opts: RefreshOptions): Promise<{ serverFactorEncs; userFactorEncs }> {
-    const { targetIndexes, inputIndex, selectedServers, vid1, vid2, vidSigs, dkg2Pub, inputShare } = opts;
+  async refresh(opts: RefreshOptions): Promise<RefreshResponse[]> {
+    const { targetIndexes, inputIndex, selectedServers, vid1, vid2, vidSigs, dkgNewPub, inputShare, factorPubs } = opts;
     const serversInfo: ServersInfo = {
       pubkeys: this.serverPubKeys,
       selected: selectedServers,
@@ -81,7 +102,7 @@ export class RSSClient {
             user_temp_pubkey: hexPoint(this.tempPubKey),
             target_index: targetIndexes,
             auth: {
-              vid1,
+              vid: vid1,
               vidSigs,
             },
           })
@@ -101,7 +122,7 @@ export class RSSClient {
               user_temp_pubkey: hexPoint(this.tempPubKey),
               target_index: targetIndexes,
               auth: {
-                vid2, // TODO: undesigned
+                vid: vid2, // TODO: undesigned
                 vidSigs,
               },
             })
@@ -221,7 +242,7 @@ export class RSSClient {
     targetIndexes.map((target, i) => {
       const { mc, sc } = sums[i];
       // check master poly commits are consistent with tssPubKey
-      const temp1 = ecPoint(dkg2Pub).mul(getLagrangeCoeffs([1, target], 1));
+      const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
       if (
@@ -253,7 +274,7 @@ export class RSSClient {
 
     const userFactorEncs = await Promise.all(
       userShares.map((userShare, i) => {
-        const pub = this.factorPubs[i];
+        const pub = factorPubs[i];
         return encrypt(Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"), Buffer.from(userShare.toString(16, 64), "hex"));
       })
     );
@@ -286,7 +307,7 @@ export class RSSClient {
             master_commits: mc.map(hexPoint),
             server_commits: sc.map(hexPoint),
             server_encs: serverEncs[i][ind - 1],
-            factor_pubkeys: [this.factorPubs[i]], // TODO: must we do it like this?
+            factor_pubkeys: [factorPubs[i]], // TODO: must we do it like this?
           };
           data.push(round2RequestData);
           return null;
@@ -303,9 +324,21 @@ export class RSSClient {
       })
     );
 
-    return {
-      serverFactorEncs,
-      userFactorEncs,
-    };
+    const factorEncs: RefreshResponse[] = [];
+    for (let i = 0; i < factorPubs.length; i++) {
+      factorEncs.push({
+        targetIndex: targetIndexes[i],
+        factorPub: factorPubs[i],
+        serverFactorEncs: serverFactorEncs.map((s) => s.data[i].encs[0]),
+        userFactorEnc: userFactorEncs[i],
+      });
+    }
+
+    return factorEncs;
   }
+
+  // async recover(opts: RecoverOptions): Promise<RecoverResponse> {
+  //   const { factorKey, serverEncs, userEnc } = opts;
+
+  // }
 }
