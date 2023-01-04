@@ -70,7 +70,7 @@ describe("RSS Client", function () {
       serverThreshold,
       tssPubKey: hexPoint(tssPubKey),
     });
-    const refreshResponse = await rssClient.refresh({
+    const refreshed = await rssClient.refresh({
       dkgNewPub: hexPoint(dkg2Pub),
       inputIndex,
       inputShare: tss2,
@@ -83,7 +83,7 @@ describe("RSS Client", function () {
     });
 
     const recovered = await Promise.all(
-      refreshResponse.map((r, i) =>
+      refreshed.map((r, i) =>
         rssClient.recover({
           factorKey: factorKeys[i],
           serverEncs: r.serverFactorEncs,
