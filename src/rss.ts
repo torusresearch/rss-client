@@ -86,7 +86,7 @@ export type RecoverOptions = {
 };
 
 export type RecoverResponse = {
-  factorShare: BN;
+  tssShare: BN;
 };
 
 export class RSSClient {
@@ -368,21 +368,21 @@ export class RSSClient {
 
     return factorEncs;
   }
+}
 
-  async recover(opts: RecoverOptions): Promise<RecoverResponse> {
-    const { factorKey, serverEncs, userEnc, selectedServers } = opts;
-    const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
-    const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
-    const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
-    const [decryptedUserEnc, decryptedServerEncs] = await Promise.all([prom1, prom2]);
-    // use threshold number of factor encryptions from the servers to interpolate server share
-    const someDecrypted = decryptedServerEncs.filter((_, j) => selectedServers.indexOf(j + 1) >= 0);
-    const decryptedLCs = selectedServers.map((index) => getLagrangeCoeffs(selectedServers, index));
-    const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
-    const serverReconstructed = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
-    const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 2], 1));
-    const factorShare = temp1.add(temp2).umod(ecCurve.n);
+export async function recover(opts: RecoverOptions): Promise<RecoverResponse> {
+  const { factorKey, serverEncs, userEnc, selectedServers } = opts;
+  const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
+  const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
+  const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
+  const [decryptedUserEnc, decryptedServerEncs] = await Promise.all([prom1, prom2]);
+  // use threshold number of factor encryptions from the servers to interpolate server share
+  const someDecrypted = decryptedServerEncs.filter((_, j) => selectedServers.indexOf(j + 1) >= 0);
+  const decryptedLCs = selectedServers.map((index) => getLagrangeCoeffs(selectedServers, index));
+  const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
+  const serverReconstructed = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
+  const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 2], 1));
+  const tssShare = temp1.add(temp2).umod(ecCurve.n);
 
-    return { factorShare };
-  }
+  return { tssShare };
 }

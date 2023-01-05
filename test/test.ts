@@ -5,7 +5,7 @@ import BN from "bn.js";
 import log from "loglevel";
 import * as fetch from "node-fetch";
 
-import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, RSSClient } from "../src";
+import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, recover, RSSClient } from "../src";
 (globalThis as any).fetch = fetch;
 
 describe("RSS Client", function () {
@@ -61,7 +61,7 @@ describe("RSS Client", function () {
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return post(`${endpoint}/tss_share`, {
-          label: "test%2",
+          label: "test`2",
           tss_share_hex: getShare(serverPoly2, i + 1).toString(16, 64),
         }).catch((e) => log.error(e));
       })
@@ -82,13 +82,13 @@ describe("RSS Client", function () {
       factorPubs,
       targetIndexes,
       vid1: "test",
-      vid2: "test%2",
+      vid2: "test`2",
       vidSigs: [],
     });
 
     const recovered = await Promise.all(
       refreshed.map((r, i) =>
-        rssClient.recover({
+        recover({
           factorKey: factorKeys[i],
           serverEncs: r.serverFactorEncs,
           userEnc: r.userFactorEnc,
@@ -97,14 +97,14 @@ describe("RSS Client", function () {
       )
     );
 
-    const factorShares = recovered.map((r) => r.factorShare);
+    const tssShares = recovered.map((r) => r.tssShare);
 
     // check that shares are valid
 
     targetIndexes.map((target, i) => {
       const interpolationLCs = [1, target].map((a) => getLagrangeCoeffs([1, target], a));
 
-      const shares = [dkg2Priv, factorShares[i]];
+      const shares = [dkg2Priv, tssShares[i]];
 
       const _tssPrivKey = dotProduct(interpolationLCs, shares).umod(ecCurve.n);
 
