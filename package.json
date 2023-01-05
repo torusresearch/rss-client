@@ -1,6 +1,6 @@
 {
   "name": "@toruslabs/rss-client",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "RSS Client",
   "main": "dist/rssClient.cjs.js",
   "module": "dist/rssClient.esm.js",
