@@ -48,7 +48,7 @@ describe("RSS Client", function () {
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return post(`${endpoint}/tss_share`, {
-          label: "test",
+          label: "test\u0015default\u00160",
           tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
         }).catch((e) => log.error(e));
       })
@@ -61,7 +61,7 @@ describe("RSS Client", function () {
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return post(`${endpoint}/tss_share`, {
-          label: "test`2",
+          label: "test\u0015default\u00161",
           tss_share_hex: getShare(serverPoly2, i + 1).toString(16, 64),
         }).catch((e) => log.error(e));
       })
@@ -81,8 +81,8 @@ describe("RSS Client", function () {
       selectedServers: [1, 2, 3],
       factorPubs,
       targetIndexes,
-      vid1: "test",
-      vid2: "test`2",
+      vid1: "test\u0015default\u00160",
+      vid2: "test\u0015default\u00161",
       vidSigs: [],
     });
 
