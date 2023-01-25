@@ -22,6 +22,7 @@ describe("RSS Client", function () {
   //   ];
   // });
   it("#should return correct values", async function () {
+    const testId = "test@test.com\u001cgoogle";
     const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
     const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
     const serverEndpoints = [
@@ -65,7 +66,7 @@ describe("RSS Client", function () {
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return post(`${endpoint}/tss_share`, {
-          label: "leonard@tor.us\u0125facebook\u0015default\u00160",
+          label: `${testId}\u0015default\u00160`,
           tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
         }).catch((e) => log.error(e));
       })
@@ -84,7 +85,7 @@ describe("RSS Client", function () {
         // eslint-disable-next-line no-console
         console.log(`endpoint ${endpoint}, shareHex ${shareHex}`);
         return post(`${endpoint}/tss_share`, {
-          label: "leonard@tor.us\u0125facebook\u0015default\u00161",
+          label: `${testId}\u0015default\u00161`,
           tss_share_hex: shareHex,
         }).catch((e) => log.error(e));
       })
@@ -104,8 +105,8 @@ describe("RSS Client", function () {
       selectedServers: [1, 2, 3],
       factorPubs,
       targetIndexes,
-      oldLabel: "leonard@tor.us\u0125facebook\u0015default\u00160",
-      newLabel: "leonard@tor.us\u0125facebook\u0015default\u00161",
+      oldLabel: `${testId}\u0015default\u00160`,
+      newLabel: `${testId}\u0015default\u00161`,
       sigs: [],
     });
 
