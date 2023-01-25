@@ -1,12 +1,11 @@
-/* eslint-disable no-console */
 import { generatePrivate } from "@toruslabs/eccrypto";
-import { post } from "@toruslabs/http-helpers";
 import assert from "assert";
 import BN from "bn.js";
 import log from "loglevel";
 import * as fetch from "node-fetch";
 
-import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, recover, RSSClient } from "../src";
+import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, postEndpoint, recover, RSSClient } from "../src";
+import { MockServer } from "../src/mock";
 (globalThis as any).fetch = fetch;
 
 describe("RSS Client", function () {
@@ -25,13 +24,7 @@ describe("RSS Client", function () {
     const testId = "test@test.com\u001cgoogle";
     const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
     const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
-    const serverEndpoints = [
-      "http://localhost:7071",
-      "http://localhost:7072",
-      "http://localhost:7073",
-      "http://localhost:7074",
-      "http://localhost:7075",
-    ];
+    const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
     const serverCount = serverEndpoints.length;
 
     const serverPrivKeys = [];
@@ -41,7 +34,7 @@ describe("RSS Client", function () {
     const serverPubKeys = serverPrivKeys.map((privKey) => hexPoint(ecCurve.g.mul(privKey)));
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return post(`${endpoint}/private_key`, { private_key: serverPrivKeys[i] }).catch((e) => log.error(e));
+        return postEndpoint(endpoint, "/private_key", { private_key: serverPrivKeys[i].toString(16, 64) }).catch((e) => log.error(e));
       })
     );
     // const serverPubKeys = await Promise.all(
@@ -52,20 +45,15 @@ describe("RSS Client", function () {
     const serverThreshold = 3;
     const inputIndex = 2;
     const tssPrivKey = new BN(generatePrivate());
-    console.log(`tssPrivKey: ${tssPrivKey.toString(16, 64)}`);
     const tssPubKey = ecCurve.g.mul(tssPrivKey);
     const masterPoly = generatePolynomial(1, tssPrivKey);
-    console.log(`tss1: ${getShare(masterPoly, 1).toString(16, 64)}`);
-    const tss1Pub = ecCurve.g.mul(masterPoly[0]);
-    console.log(`tss1Pub x: ${tss1Pub.x.toString(16, 64)} y: ${tss1Pub.y.toString(16, 64)} `);
     const tss2 = getShare(masterPoly, inputIndex);
-    console.log(`tss2: ${tss2.toString(16, 64)}`);
     const serverPoly = generatePolynomial(serverThreshold - 1, getShare(masterPoly, 1));
 
     // set tssShares on servers
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return post(`${endpoint}/tss_share`, {
+        return postEndpoint(endpoint, "/tss_share", {
           label: `${testId}\u0015default\u00160`,
           tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
         }).catch((e) => log.error(e));
@@ -75,16 +63,12 @@ describe("RSS Client", function () {
     // simulate new key assign
     const dkg2Priv = new BN(generatePrivate());
     const dkg2Pub = ecCurve.g.mul(dkg2Priv);
-    console.log(`dkg2Priv: ${dkg2Priv.toString(16, 64)}`);
-    console.log(`dkg2pub x: ${dkg2Pub.x.toString(16, 64)} y: ${dkg2Pub.y.toString(16, 64)}`);
-    console.log(serverPubKeys);
     const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv);
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         const shareHex = getShare(serverPoly2, i + 1).toString(16, 64);
-        // eslint-disable-next-line no-console
-        console.log(`endpoint ${endpoint}, shareHex ${shareHex}`);
-        return post(`${endpoint}/tss_share`, {
+
+        return postEndpoint(endpoint, "/tss_share", {
           label: `${testId}\u0015default\u00161`,
           tss_share_hex: shareHex,
         }).catch((e) => log.error(e));

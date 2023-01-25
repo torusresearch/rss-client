@@ -17,34 +17,34 @@ import {
   PointHex,
 } from "./utils";
 
-export interface MockServer {
-  get<T>(path: string): Promise<T>;
-  post<T>(path: string, data?: Data): Promise<T>;
+export interface IMockServer {
+  get(path: string): Promise<any>;
+  post(path: string, data?: Data): Promise<any>;
 }
 
-export function getEndpoint<T>(endpoint: string | MockServer, path: string, options_?: RequestInit, customOptions?: CustomOptions): Promise<T> {
+export function getEndpoint<T>(endpoint: string | IMockServer, path: string, options_?: RequestInit, customOptions?: CustomOptions): Promise<any> {
   if (typeof endpoint === "string") {
-    return get(`${endpoint}${path}`, options_, customOptions);
+    return get<T>(`${endpoint}${path}`, options_, customOptions);
   }
-  return endpoint.post<T>(path);
+  return endpoint.get(path);
 }
 
 export function postEndpoint<T>(
-  endpoint: string | MockServer,
+  endpoint: string | IMockServer,
   path: string,
   data?: Data,
   options_?: RequestInit,
   customOptions?: CustomOptions
-): Promise<T> {
+): Promise<any> {
   if (typeof endpoint === "string") {
-    return post(`${endpoint}${path}`, data, options_, customOptions);
+    return post<T>(`${endpoint}${path}`, data, options_, customOptions);
   }
-  return endpoint.post<T>(path, data);
+  return endpoint.post(path, data);
 }
 
 export type RSSClientOptions = {
   tssPubKey: PointHex;
-  serverEndpoints: string[] | MockServer[];
+  serverEndpoints: string[] | IMockServer[];
   serverThreshold: number;
   serverPubKeys: PointHex[];
   tempKey?: BN;
@@ -121,7 +121,7 @@ export class RSSClient {
 
   tempPubKey: PointHex;
 
-  serverEndpoints: string[] | MockServer[];
+  serverEndpoints: string[] | IMockServer[];
 
   serverThreshold: number;
 
@@ -372,7 +372,7 @@ export class RSSClient {
           return null;
         });
         const serverEndpoint = this.serverEndpoints[ind - 1];
-        return post<RSSRound2Response>(`${serverEndpoint}/rss_round_2`, {
+        return postEndpoint<RSSRound2Response>(serverEndpoint, "/rss_round_2", {
           round_name: "rss_round_2",
           server_index: ind,
           target_index: targetIndexes,
