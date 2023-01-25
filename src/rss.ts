@@ -1,5 +1,5 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
-import { post } from "@toruslabs/http-helpers";
+import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
 import log from "loglevel";
 
@@ -17,9 +17,34 @@ import {
   PointHex,
 } from "./utils";
 
+export interface MockServer {
+  get<T>(path: string): Promise<T>;
+  post<T>(path: string, data?: Data): Promise<T>;
+}
+
+export function getEndpoint<T>(endpoint: string | MockServer, path: string, options_?: RequestInit, customOptions?: CustomOptions): Promise<T> {
+  if (typeof endpoint === "string") {
+    return get(`${endpoint}${path}`, options_, customOptions);
+  }
+  return endpoint.post<T>(path);
+}
+
+export function postEndpoint<T>(
+  endpoint: string | MockServer,
+  path: string,
+  data?: Data,
+  options_?: RequestInit,
+  customOptions?: CustomOptions
+): Promise<T> {
+  if (typeof endpoint === "string") {
+    return post(`${endpoint}${path}`, data, options_, customOptions);
+  }
+  return endpoint.post<T>(path, data);
+}
+
 export type RSSClientOptions = {
   tssPubKey: PointHex;
-  serverEndpoints: string[];
+  serverEndpoints: string[] | MockServer[];
   serverThreshold: number;
   serverPubKeys: PointHex[];
   tempKey?: BN;
@@ -32,9 +57,9 @@ export type ServersInfo = {
 };
 
 export type RefreshOptions = {
-  vid1: string;
-  vid2: string;
-  vidSigs: any[];
+  oldLabel: string;
+  newLabel: string;
+  sigs: any[];
   dkgNewPub: PointHex;
   inputShare: BN;
   inputIndex: number;
@@ -96,7 +121,7 @@ export class RSSClient {
 
   tempPubKey: PointHex;
 
-  serverEndpoints: string[];
+  serverEndpoints: string[] | MockServer[];
 
   serverThreshold: number;
 
@@ -117,7 +142,7 @@ export class RSSClient {
   }
 
   async refresh(opts: RefreshOptions): Promise<RefreshResponse[]> {
-    const { targetIndexes, inputIndex, selectedServers, vid1, vid2, vidSigs, dkgNewPub, inputShare, factorPubs } = opts;
+    const { targetIndexes, inputIndex, selectedServers, oldLabel, newLabel, sigs, dkgNewPub, inputShare, factorPubs } = opts;
     if (factorPubs.length !== targetIndexes.length) throw new Error("inconsistent factorPubs and targetIndexes lengths");
     const serversInfo: ServersInfo = {
       pubkeys: this.serverPubKeys,
@@ -129,7 +154,7 @@ export class RSSClient {
     const rssRound1Proms = selectedServers
       .map((ind) => {
         const serverEndpoint = this.serverEndpoints[ind - 1];
-        return post<RSSRound1Response>(`${serverEndpoint}/rss_round_1`, {
+        return postEndpoint<RSSRound1Response>(serverEndpoint, "/rss_round_1", {
           round_name: "rss_round_1",
           server_set: "old",
           server_index: ind,
@@ -139,15 +164,15 @@ export class RSSClient {
           user_temp_pubkey: hexPoint(this.tempPubKey),
           target_index: targetIndexes,
           auth: {
-            vid: vid1,
-            vidSigs,
+            label: oldLabel,
+            sigs,
           },
         });
       })
       .concat(
         selectedServers.map((ind) => {
           const serverEndpoint = this.serverEndpoints[ind - 1];
-          return post<RSSRound1Response>(`${serverEndpoint}/rss_round_1`, {
+          return postEndpoint<RSSRound1Response>(serverEndpoint, "/rss_round_1", {
             round_name: "rss_round_1",
             server_set: "new",
             server_index: ind,
@@ -157,8 +182,8 @@ export class RSSClient {
             user_temp_pubkey: hexPoint(this.tempPubKey),
             target_index: targetIndexes,
             auth: {
-              vid: vid2, // TODO: undesigned
-              vidSigs,
+              label: newLabel, // TODO: undesigned
+              sigs,
             },
           });
         })
