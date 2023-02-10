@@ -42,15 +42,22 @@ describe("RSS Client", function () {
     //     return get<PointHex>(`${endpoint}/public_key`);
     //   })
     // );
+
+    // Create a new 2/2 tss setup. Share index are 0, 1.
+    // 0 is for tss key (never reconstructed)
+    // 1 is for servers
+    // 2 is for device
     const serverThreshold = 3;
     const inputIndex = 2;
     const tssPrivKey = new BN(generatePrivate());
     const tssPubKey = ecCurve.g.mul(tssPrivKey);
     const masterPoly = generatePolynomial(1, tssPrivKey);
     const tss2 = getShare(masterPoly, inputIndex);
+
     const serverPoly = generatePolynomial(serverThreshold - 1, getShare(masterPoly, 1));
 
     // set tssShares on servers
+    // We choose 5 indexes 1..5. 3/5 interpolated to serverPoly
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return postEndpoint(endpoint, "/tss_share", {
@@ -82,6 +89,8 @@ describe("RSS Client", function () {
       tssPubKey: hexPoint(tssPubKey),
     });
     const targetIndexes = [2, 3];
+
+    // Input index represents the proxy index used for comms between servers
     const refreshed = await rssClient.refresh({
       dkgNewPub: hexPoint(dkg2Pub),
       inputIndex,

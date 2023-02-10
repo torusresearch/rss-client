@@ -105,6 +105,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   }
 
   // retrieve server tss subshare from db
+  // Why is this function passed externally ?
   const tssServerShare = await getTSSShare(auth.label);
 
   const masterPolys = [];
@@ -112,6 +113,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   const serverPolys = [];
   const serverPolyCommits = [];
 
+  // Find the new polynomial for master polynomial and the server polynomial
   for (let i = 0; i < finalLagrangeCoeffs.length; i++) {
     const lc = finalLagrangeCoeffs[i];
     const m = generatePolynomial(1, lc.mul(tssServerShare).umod(ecCurve.n));
@@ -133,7 +135,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
     serverEncs.push([]); // for each target_index, create an array of server encryptions
   }
 
-  // generate N + 1 shares
+  // generate N + 1 shares (n servers and 1 device)
   for (let i = 0; i < b.target_index.length; i++) {
     const masterPoly = masterPolys[i];
     userEncs.push(
@@ -191,7 +193,7 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
     const masterCommits = b.data[i].master_commits.map(ecPoint);
     const serverCommits = b.data[i].server_commits.map(ecPoint);
 
-    const gB0 = masterCommits[0].add(masterCommits[1]);
+    const gB0 = masterCommits[0].add(masterCommits[1]); // Why is this hardcoded ?
     const _gB0 = serverCommits[0];
     if (!gB0.x.eq(_gB0.x) || !gB0.y.eq(_gB0.y)) {
       throw new Error("server sharing poly commits are inconsistent with master sharing poly commits");
