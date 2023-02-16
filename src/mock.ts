@@ -139,7 +139,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
     userEncs.push(
       await encrypt(
         Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
-        Buffer.from(getShare(masterPoly, 2).toString(16, 64), "hex")
+        Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex")
       )
     );
 
@@ -383,7 +383,7 @@ export class MockServer {
       userEncs.push(
         await encrypt(
           Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(masterPoly, 2).toString(16, 64), "hex")
+          Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex") // Note: this is because 99 is the hardcoded value when doing rss DKG hierarchical sharing
         )
       );
 

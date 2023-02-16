@@ -37,11 +37,6 @@ describe("RSS Client", function () {
         return postEndpoint(endpoint, "/private_key", { private_key: serverPrivKeys[i].toString(16, 64) }).catch((e) => log.error(e));
       })
     );
-    // const serverPubKeys = await Promise.all(
-    //   serverEndpoints.map((endpoint) => {
-    //     return get<PointHex>(`${endpoint}/public_key`);
-    //   })
-    // );
     const serverThreshold = 3;
     const inputIndex = 2;
     const tssPrivKey = new BN(generatePrivate());

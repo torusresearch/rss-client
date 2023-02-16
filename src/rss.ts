@@ -222,7 +222,7 @@ export class RSSClient {
       _userEncs.push(
         await encrypt(
           Buffer.from(`04${hexPoint(this.tempPubKey).x.padStart(64, "0")}${hexPoint(this.tempPubKey).y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(_masterPoly, 2).toString(16, 64), "hex")
+          Buffer.from(getShare(_masterPoly, 99).toString(16, 64), "hex")
         )
       );
 
@@ -325,7 +325,7 @@ export class RSSClient {
       const userShare = userDecs.map((userDec) => new BN(userDec)).reduce((acc, d) => acc.add(d).umod(ecCurve.n), new BN(0));
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
-      const _gU = mc[0].add(mc[1].mul(new BN(2))); // master poly evaluated at x = 2
+      const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
       if (gU.x.toString(16, 64) !== _gU.x.toString(16, 64) || gU.y.toString(16, 64) !== _gU.y.toString(16, 64))
         throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
@@ -404,9 +404,9 @@ export async function recover(opts: RecoverOptions): Promise<RecoverResponse> {
   // use threshold number of factor encryptions from the servers to interpolate server share
   const someDecrypted = decryptedServerEncs.filter((_, j) => selectedServers.indexOf(j + 1) >= 0);
   const decryptedLCs = selectedServers.map((index) => getLagrangeCoeffs(selectedServers, index));
-  const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 2], 2));
+  const temp1 = decryptedUserEnc.mul(getLagrangeCoeffs([1, 99], 99));
   const serverReconstructed = dotProduct(someDecrypted, decryptedLCs).umod(ecCurve.n);
-  const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 2], 1));
+  const temp2 = serverReconstructed.mul(getLagrangeCoeffs([1, 99], 1));
   const tssShare = temp1.add(temp2).umod(ecCurve.n);
 
   return { tssShare };
