@@ -1,16 +1,25 @@
-import { generatePrivate } from "@toruslabs/eccrypto";
 import assert from "assert";
-import BN from "bn.js";
 import log from "loglevel";
 import * as fetch from "node-fetch";
 
-import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, postEndpoint, recover, RSSClient } from "../src";
+import {
+  dotProduct,
+  ecCurve,
+  generatePolynomial,
+  genPrivateKey,
+  getLagrangeCoeffs,
+  getShare,
+  hexPoint,
+  postEndpoint,
+  recover,
+  RSSClient,
+} from "../src";
 import { MockServer } from "../src/mock";
 (globalThis as any).fetch = fetch;
 
 describe("RSS Client", function () {
   // it("#should mock servers", async function() {
-  //   const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
+  //   const factorKeys = [genPrivateKey(), genPrivateKey()];
   //   const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
   //   const serverEndpoints = [
   //     "http://localhost:7071",
@@ -22,14 +31,14 @@ describe("RSS Client", function () {
   // });
   it("#should return correct values", async function () {
     const testId = "test@test.com\u001cgoogle";
-    const factorKeys = [new BN(generatePrivate()), new BN(generatePrivate())];
+    const factorKeys = [genPrivateKey(), genPrivateKey()];
     const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
     const serverCount = serverEndpoints.length;
 
     const serverPrivKeys = [];
     for (let i = 0; i < serverCount; i++) {
-      serverPrivKeys.push(new BN(generatePrivate()));
+      serverPrivKeys.push(genPrivateKey());
     }
     const serverPubKeys = serverPrivKeys.map((privKey) => hexPoint(ecCurve.g.mul(privKey)));
     await Promise.all(
@@ -39,7 +48,7 @@ describe("RSS Client", function () {
     );
     const serverThreshold = 3;
     const inputIndex = 2;
-    const tssPrivKey = new BN(generatePrivate());
+    const tssPrivKey = genPrivateKey();
     const tssPubKey = ecCurve.g.mul(tssPrivKey);
     const masterPoly = generatePolynomial(1, tssPrivKey);
     const tss2 = getShare(masterPoly, inputIndex);
@@ -56,7 +65,7 @@ describe("RSS Client", function () {
     );
 
     // simulate new key assign
-    const dkg2Priv = new BN(generatePrivate());
+    const dkg2Priv = genPrivateKey();
     const dkg2Pub = ecCurve.g.mul(dkg2Priv);
     const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv);
     await Promise.all(

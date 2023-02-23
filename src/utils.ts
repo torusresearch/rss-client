@@ -1,9 +1,13 @@
-import { decrypt as ecDecrypt, encrypt as ecEncrypt, generatePrivate } from "@toruslabs/eccrypto";
+import { decrypt as ecDecrypt, encrypt as ecEncrypt } from "@toruslabs/eccrypto";
 import BN from "bn.js";
 import { curve, ec as EC } from "elliptic";
 
-const ec = new EC("secp256k1");
+const ec = new EC("ed25519");
 export const ecCurve = ec;
+export function genPrivateKey() {
+  const k = ecCurve.genKeyPair();
+  return k.getPrivate();
+}
 
 export type PointHex = {
   x: string | null;
@@ -71,7 +75,7 @@ export function generatePolynomial(degree: number, yIntercept: BN): BN[] {
     i++;
   }
   for (; i <= degree; i++) {
-    res.push(new BN(generatePrivate()));
+    res.push(genPrivateKey());
   }
   return res;
 }

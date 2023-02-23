@@ -1,4 +1,3 @@
-import { generatePrivate } from "@toruslabs/eccrypto";
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
 import log from "loglevel";
@@ -11,6 +10,7 @@ import {
   encrypt,
   EncryptedMessage,
   generatePolynomial,
+  genPrivateKey,
   getLagrangeCoeffs,
   getShare,
   hexPoint,
@@ -136,7 +136,7 @@ export class RSSClient {
       this.tempPrivKey = opts.tempKey;
       this.tempPubKey = ecCurve.g.mul(opts.tempKey);
     } else {
-      this.tempPrivKey = new BN(generatePrivate());
+      this.tempPrivKey = genPrivateKey();
       this.tempPubKey = ecCurve.g.mul(this.tempPrivKey);
     }
   }
