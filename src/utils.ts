@@ -1,4 +1,4 @@
-import { decrypt as ecDecrypt, encrypt as ecEncrypt } from "@toruslabs/eccrypto";
+// import { decrypt as ecDecrypt, encrypt as ecEncrypt } from "@toruslabs/eccrypto";
 import BN from "bn.js";
 import { curve, ec as EC } from "elliptic";
 
@@ -47,24 +47,32 @@ export type EncryptedMessage = {
 
 // Wrappers around ECC encrypt/decrypt to use the hex serialization
 export async function encrypt(publicKey: Buffer, msg: Buffer): Promise<EncryptedMessage> {
-  const encryptedDetails = await ecEncrypt(publicKey, msg);
+  // const encryptedDetails = await ecEncrypt(publicKey, msg);
+  // return {
+  //   ciphertext: encryptedDetails.ciphertext.toString("hex"),
+  //   ephemPublicKey: encryptedDetails.ephemPublicKey.toString("hex"),
+  //   iv: encryptedDetails.iv.toString("hex"),
+  //   mac: encryptedDetails.mac.toString("hex"),
+  // };
+
   return {
-    ciphertext: encryptedDetails.ciphertext.toString("hex"),
-    ephemPublicKey: encryptedDetails.ephemPublicKey.toString("hex"),
-    iv: encryptedDetails.iv.toString("hex"),
-    mac: encryptedDetails.mac.toString("hex"),
+    ciphertext: msg.toString("hex"),
+    ephemPublicKey: "",
+    iv: "",
+    mac: "",
   };
 }
 
 export async function decrypt(privKey: Buffer, msg: EncryptedMessage): Promise<Buffer> {
-  const bufferEncDetails = {
-    ciphertext: Buffer.from(msg.ciphertext, "hex"),
-    ephemPublicKey: Buffer.from(msg.ephemPublicKey, "hex"),
-    iv: Buffer.from(msg.iv, "hex"),
-    mac: Buffer.from(msg.mac, "hex"),
-  };
+  // const bufferEncDetails = {
+  //   ciphertext: Buffer.from(msg.ciphertext, "hex"),
+  //   ephemPublicKey: Buffer.from(msg.ephemPublicKey, "hex"),
+  //   iv: Buffer.from(msg.iv, "hex"),
+  //   mac: Buffer.from(msg.mac, "hex"),
+  // };
+  // return ecDecrypt(privKey, bufferEncDetails);
 
-  return ecDecrypt(privKey, bufferEncDetails);
+  return Buffer.from(msg.ciphertext, "hex");
 }
 
 export function generatePolynomial(degree: number, yIntercept: BN): BN[] {
