@@ -34,7 +34,7 @@ export function hexPoint(p: any): PointHex {
     }
     throw new Error("could not serialize into PointHex");
   }
-  return { x: p.x.toString(16, 64), y: p.y.toString(16, 64) };
+  return { x: p.getX().toString(16, 64), y: p.getY().toString(16, 64) };
 }
 
 export type EncryptedMessage = {
