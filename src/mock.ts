@@ -193,7 +193,7 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
 
     const gB0 = masterCommits[0].add(masterCommits[1]);
     const _gB0 = serverCommits[0];
-    if (!gB0.x.eq(_gB0.x) || !gB0.y.eq(_gB0.y)) {
+    if (!gB0.getX().eq(_gB0.getX()) || !gB0.getY().eq(_gB0.getY())) {
       throw new Error("server sharing poly commits are inconsistent with master sharing poly commits");
     }
 
@@ -215,7 +215,7 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
       const ind = new BN(b.server_index);
       _gDec = _gDec.add(gBX.mul(ind.pow(new BN(j))));
     }
-    if (!gDec.x.eq(_gDec.x) || !gDec.y.eq(_gDec.y)) {
+    if (!gDec.getX().eq(_gDec.getX()) || !gDec.getY().eq(_gDec.getY())) {
       throw new Error("shares are inconsistent with the server poly commits");
     }
     const factorEncs = await Promise.all(
@@ -437,7 +437,7 @@ export class MockServer {
 
       const gB0 = masterCommits[0].add(masterCommits[1]);
       const _gB0 = serverCommits[0];
-      if (!gB0.x.eq(_gB0.x) || !gB0.y.eq(_gB0.y)) {
+      if (!gB0.getX().eq(_gB0.getX()) || !gB0.getY().eq(_gB0.getY())) {
         throw new Error("server sharing poly commits are inconsistent with master sharing poly commits");
       }
 
@@ -459,7 +459,7 @@ export class MockServer {
         const ind = new BN(b.server_index);
         _gDec = _gDec.add(gBX.mul(ind.pow(new BN(j))));
       }
-      if (!gDec.x.eq(_gDec.x) || !gDec.y.eq(_gDec.y)) {
+      if (!gDec.getX().eq(_gDec.getX()) || !gDec.getY().eq(_gDec.getY())) {
         throw new Error("shares are inconsistent with the server poly commits");
       }
       const factorEncs = await Promise.all(
