@@ -1,5 +1,6 @@
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
+import { curve } from "elliptic";
 import log from "loglevel";
 
 import {
@@ -119,7 +120,7 @@ export class RSSClient {
 
   tempPrivKey: BN;
 
-  tempPubKey: PointHex;
+  tempPubKey: curve.base.BasePoint;
 
   serverEndpoints: string[] | IMockServer[];
 
