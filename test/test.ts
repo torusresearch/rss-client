@@ -5,6 +5,7 @@ import * as fetch from "node-fetch";
 import {
   dotProduct,
   ecCurve,
+  genEncKeyPair,
   generatePolynomial,
   genPrivateKey,
   getLagrangeCoeffs,
@@ -31,19 +32,18 @@ describe("RSS Client", function () {
   // });
   it("#should return correct values", async function () {
     const testId = "test@test.com\u001cgoogle";
-    const factorKeys = [genPrivateKey(), genPrivateKey()];
-    const factorPubs = factorKeys.map((key) => hexPoint(ecCurve.g.mul(key)));
+    const factorKeyPairs = [...Array(2).keys()].map(() => genEncKeyPair());
+    const factorKeys = factorKeyPairs.map((kp) => kp.sk);
+    const factorPubs = factorKeyPairs.map((kp) => kp.pk);
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
     const serverCount = serverEndpoints.length;
 
-    const serverPrivKeys = [];
-    for (let i = 0; i < serverCount; i++) {
-      serverPrivKeys.push(genPrivateKey());
-    }
-    const serverPubKeys = serverPrivKeys.map((privKey) => hexPoint(ecCurve.g.mul(privKey)));
+    const serverKeyPairs = [...Array(serverCount).keys()].map(() => genEncKeyPair());
+    const serverPrivKeys = serverKeyPairs.map((kp) => kp.sk);
+    const serverPubKeys = serverKeyPairs.map((kp) => kp.pk);
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        return postEndpoint(endpoint, "/private_key", { private_key: serverPrivKeys[i].toString(16, 64) }).catch((e) => log.error(e));
+        return postEndpoint(endpoint, "/private_key", { private_key: serverPrivKeys[i] }).catch((e) => log.error(e));
       })
     );
     const serverThreshold = 3;

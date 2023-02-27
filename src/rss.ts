@@ -1,17 +1,19 @@
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
-import { curve } from "elliptic";
 import log from "loglevel";
 
 import {
   decrypt,
+  DecryptionKey,
   dotProduct,
   ecCurve,
   ecPoint,
   encrypt,
   EncryptedMessage,
+  EncryptionKey,
+  EncryptionKeyPair,
+  genEncKeyPair,
   generatePolynomial,
-  genPrivateKey,
   getLagrangeCoeffs,
   getShare,
   hexPoint,
@@ -47,12 +49,12 @@ export type RSSClientOptions = {
   tssPubKey: PointHex;
   serverEndpoints: string[] | IMockServer[];
   serverThreshold: number;
-  serverPubKeys: PointHex[];
-  tempKey?: BN;
+  serverPubKeys: EncryptionKey[];
+  tempKeyPair?: EncryptionKeyPair;
 };
 
 export type ServersInfo = {
-  pubkeys: PointHex[];
+  pubkeys: EncryptionKey[];
   threshold: number;
   selected: number[];
 };
@@ -66,7 +68,7 @@ export type RefreshOptions = {
   inputIndex: number;
   targetIndexes: number[];
   selectedServers: number[];
-  factorPubs: PointHex[];
+  factorPubs: EncryptionKey[];
 };
 
 export type RSSRound1ResponseData = {
@@ -99,13 +101,13 @@ export type ServerFactorEnc = {
 
 export type RefreshResponse = {
   targetIndex: number;
-  factorPub: PointHex;
+  factorPub: EncryptionKey;
   serverFactorEncs: EncryptedMessage[];
   userFactorEnc: EncryptedMessage;
 };
 
 export type RecoverOptions = {
-  factorKey: BN;
+  factorKey: DecryptionKey;
   serverEncs: EncryptedMessage[];
   userEnc: EncryptedMessage;
   selectedServers: number[];
@@ -118,27 +120,28 @@ export type RecoverResponse = {
 export class RSSClient {
   tssPubKey: PointHex;
 
-  tempPrivKey: BN;
+  tempPrivKey: DecryptionKey;
 
-  tempPubKey: curve.base.BasePoint;
+  tempPubKey: EncryptionKey;
 
   serverEndpoints: string[] | IMockServer[];
 
   serverThreshold: number;
 
-  serverPubKeys: PointHex[];
+  serverPubKeys: EncryptionKey[];
 
   constructor(opts: RSSClientOptions) {
     this.tssPubKey = opts.tssPubKey;
     this.serverEndpoints = opts.serverEndpoints;
     this.serverThreshold = opts.serverThreshold;
     this.serverPubKeys = opts.serverPubKeys;
-    if (opts.tempKey) {
-      this.tempPrivKey = opts.tempKey;
-      this.tempPubKey = ecCurve.g.mul(opts.tempKey);
+    if (opts.tempKeyPair) {
+      this.tempPrivKey = opts.tempKeyPair.sk;
+      this.tempPubKey = opts.tempKeyPair.pk;
     } else {
-      this.tempPrivKey = genPrivateKey();
-      this.tempPubKey = ecCurve.g.mul(this.tempPrivKey);
+      const kp = genEncKeyPair();
+      this.tempPrivKey = kp.sk;
+      this.tempPubKey = kp.pk;
     }
   }
 
@@ -162,7 +165,7 @@ export class RSSClient {
           old_servers_info: serversInfo,
           new_servers_info: serversInfo,
           old_user_share_index: inputIndex,
-          user_temp_pubkey: hexPoint(this.tempPubKey),
+          user_temp_pubkey: this.tempPubKey,
           target_index: targetIndexes,
           auth: {
             label: oldLabel,
@@ -180,7 +183,7 @@ export class RSSClient {
             old_servers_info: serversInfo,
             new_servers_info: serversInfo,
             old_user_share_index: inputIndex,
-            user_temp_pubkey: hexPoint(this.tempPubKey),
+            user_temp_pubkey: this.tempPubKey,
             target_index: targetIndexes,
             auth: {
               label: newLabel, // TODO: undesigned
@@ -220,23 +223,13 @@ export class RSSClient {
     // - generate N + 1 shares
     for (let i = 0; i < targetIndexes.length; i++) {
       const _masterPoly = _masterPolys[i];
-      _userEncs.push(
-        await encrypt(
-          Buffer.from(`04${hexPoint(this.tempPubKey).x.padStart(64, "0")}${hexPoint(this.tempPubKey).y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(_masterPoly, 99).toString(16, 64), "hex")
-        )
-      );
+      _userEncs.push(await encrypt(this.tempPubKey, Buffer.from(getShare(_masterPoly, 99).toString(16, 64), "hex")));
 
       const _serverPoly = _serverPolys[i];
       const _serverEnc = _serverEncs[i];
       for (let j = 0; j < serversInfo.pubkeys.length; j++) {
         const _pub = serversInfo.pubkeys[j];
-        _serverEnc.push(
-          await encrypt(
-            Buffer.from(`04${_pub.x.padStart(64, "0")}${_pub.y.padStart(64, "0")}`, "hex"),
-            Buffer.from(getShare(_serverPoly, j + 1).toString(16, 64), "hex")
-          )
-        );
+        _serverEnc.push(await encrypt(_pub, Buffer.from(getShare(_serverPoly, j + 1).toString(16, 64), "hex")));
       }
     }
     const _data = [];
@@ -321,11 +314,10 @@ export class RSSClient {
     });
 
     // front end checks if decrypted user shares are consistent with poly commits
-    const privKeyBuffer = Buffer.from(this.tempPrivKey.toString(16, 64), "hex");
     const userShares = [];
     for (let i = 0; i < targetIndexes.length; i++) {
       const userEncs = rssRound1Responses.map((r) => r.data[i].target_encryptions.user_enc);
-      const userDecs = await Promise.all(userEncs.map((encMsg) => decrypt(privKeyBuffer, encMsg)));
+      const userDecs = await Promise.all(userEncs.map((encMsg) => decrypt(this.tempPrivKey, encMsg)));
       const userShare = userDecs.map((userDec) => new BN(userDec)).reduce((acc, d) => acc.add(d).umod(ecCurve.n), new BN(0));
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
@@ -338,7 +330,7 @@ export class RSSClient {
     const userFactorEncs = await Promise.all(
       userShares.map((userShare, i) => {
         const pub = factorPubs[i];
-        return encrypt(Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"), Buffer.from(userShare.toString(16, 64), "hex"));
+        return encrypt(pub, Buffer.from(userShare.toString(16, 64), "hex"));
       })
     );
 
@@ -401,9 +393,8 @@ export class RSSClient {
 
 export async function recover(opts: RecoverOptions): Promise<RecoverResponse> {
   const { factorKey, serverEncs, userEnc, selectedServers } = opts;
-  const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
-  const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
-  const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));
+  const prom1 = decrypt(factorKey, userEnc).then((buf) => new BN(buf));
+  const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKey, serverEnc).then((buf) => new BN(buf))));
   const [decryptedUserEnc, decryptedServerEncs] = await Promise.all([prom1, prom2]);
   // use threshold number of factor encryptions from the servers to interpolate server share
   const someDecrypted = decryptedServerEncs.filter((_, j) => selectedServers.indexOf(j + 1) >= 0);
