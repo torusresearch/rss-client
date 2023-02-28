@@ -2,7 +2,20 @@
 import BN from "bn.js";
 
 import { ServersInfo } from "./rss";
-import { decrypt, ecCurve, ecPoint, encrypt, EncryptedMessage, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
+import {
+  decrypt,
+  DecryptionKey,
+  ecCurve,
+  ecPoint,
+  encrypt,
+  EncryptedMessage,
+  EncryptionKey,
+  generatePolynomial,
+  getLagrangeCoeffs,
+  getShare,
+  hexPoint,
+  PointHex,
+} from "./utils";
 
 type AuthData = {
   label: string;
@@ -16,7 +29,7 @@ type RSSRound1Request = {
   old_servers_info: ServersInfo;
   new_servers_info: ServersInfo;
   old_user_share_index: number;
-  user_temp_pubkey: PointHex;
+  user_temp_pubkey: EncryptionKey;
   target_index: number[];
   auth: unknown;
 };
@@ -39,7 +52,7 @@ type RSSRound2RequestData = {
   master_commits: PointHex[];
   server_commits: PointHex[];
   server_encs: EncryptedMessage[];
-  factor_pubkeys: PointHex[];
+  factor_pubkeys: EncryptionKey[];
 };
 
 type RSSRound2Request = {
@@ -136,23 +149,13 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   // generate N + 1 shares
   for (let i = 0; i < b.target_index.length; i++) {
     const masterPoly = masterPolys[i];
-    userEncs.push(
-      await encrypt(
-        Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
-        Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex")
-      )
-    );
+    userEncs.push(await encrypt(b.user_temp_pubkey, Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex")));
 
     const serverPoly = serverPolys[i];
     const serverEnc = serverEncs[i];
     for (let j = 0; j < b.new_servers_info.pubkeys.length; j++) {
       const pub = b.new_servers_info.pubkeys[j];
-      serverEnc.push(
-        await encrypt(
-          Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")
-        )
-      );
+      serverEnc.push(await encrypt(pub, Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")));
     }
   }
 
@@ -177,15 +180,13 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   return resp;
 }
 
-export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () => Promise<BN>): Promise<RSSRound2Response> {
+export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () => Promise<DecryptionKey>): Promise<RSSRound2Response> {
   const b = body;
   const privKey = await getPrivKey();
-  const privKeyHex = privKey.toString(16, 64);
-  const privKeyBuf = Buffer.from(privKeyHex, "hex");
   const data: RSSRound2ResponseData[] = [];
   if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
   for (let i = 0; i < b.data.length; i++) {
-    const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
+    const factorPubs: EncryptionKey[] = b.data[i].factor_pubkeys;
     // TODO: check that the same factorPub is not used for multiple shares
 
     const masterCommits = b.data[i].master_commits.map(ecPoint);
@@ -193,14 +194,14 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
 
     const gB0 = masterCommits[0].add(masterCommits[1]);
     const _gB0 = serverCommits[0];
-    if (!gB0.x.eq(_gB0.x) || !gB0.y.eq(_gB0.y)) {
+    if (!gB0.getX().eq(_gB0.getX()) || !gB0.getY().eq(_gB0.getY())) {
       throw new Error("server sharing poly commits are inconsistent with master sharing poly commits");
     }
 
     const encs = b.data[i].server_encs;
     const decs = await Promise.all(
       encs.map((enc) => {
-        return decrypt(privKeyBuf, enc);
+        return decrypt(privKey, enc);
       })
     );
     const dec = decs.reduce((acc, dBuf) => {
@@ -215,12 +216,12 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
       const ind = new BN(b.server_index);
       _gDec = _gDec.add(gBX.mul(ind.pow(new BN(j))));
     }
-    if (!gDec.x.eq(_gDec.x) || !gDec.y.eq(_gDec.y)) {
+    if (!gDec.getX().eq(_gDec.getX()) || !gDec.getY().eq(_gDec.getY())) {
       throw new Error("shares are inconsistent with the server poly commits");
     }
     const factorEncs = await Promise.all(
       factorPubs.map((pub) => {
-        return encrypt(Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"), Buffer.from(dec.toString(16, 64), "hex"));
+        return encrypt(pub, Buffer.from(dec.toString(16, 64), "hex"));
       })
     );
     data.push({ encs: factorEncs });
@@ -242,7 +243,7 @@ export class MockServer {
   };
 
   store: {
-    [key: string]: string;
+    [key: string]: any;
   };
 
   tssNonce: {
@@ -259,8 +260,8 @@ export class MockServer {
     return this.shareDB[label];
   }
 
-  async getPrivKey(): Promise<BN> {
-    return new BN(this.store.privKey.padStart(64, "0"), "hex");
+  async getPrivKey(): Promise<DecryptionKey> {
+    return this.store.privKey;
   }
 
   async get(path: string): Promise<PointHex | Record<string, unknown>> {
@@ -382,7 +383,7 @@ export class MockServer {
       const masterPoly = masterPolys[i];
       userEncs.push(
         await encrypt(
-          Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
+          b.user_temp_pubkey,
           Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex") // Note: this is because 99 is the hardcoded value when doing rss DKG hierarchical sharing
         )
       );
@@ -391,12 +392,7 @@ export class MockServer {
       const serverEnc = serverEncs[i];
       for (let j = 0; j < b.new_servers_info.pubkeys.length; j++) {
         const pub = b.new_servers_info.pubkeys[j];
-        serverEnc.push(
-          await encrypt(
-            Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"),
-            Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")
-          )
-        );
+        serverEnc.push(await encrypt(pub, Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")));
       }
     }
 
@@ -429,7 +425,7 @@ export class MockServer {
     const data: RSSRound2ResponseData[] = [];
     if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
     for (let i = 0; i < b.data.length; i++) {
-      const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
+      const factorPubs: EncryptionKey[] = b.data[i].factor_pubkeys;
       // TODO: check that the same factorPub is not used for multiple shares
 
       const masterCommits = b.data[i].master_commits.map(ecPoint);
@@ -437,7 +433,7 @@ export class MockServer {
 
       const gB0 = masterCommits[0].add(masterCommits[1]);
       const _gB0 = serverCommits[0];
-      if (!gB0.x.eq(_gB0.x) || !gB0.y.eq(_gB0.y)) {
+      if (!gB0.getX().eq(_gB0.getX()) || !gB0.getY().eq(_gB0.getY())) {
         throw new Error("server sharing poly commits are inconsistent with master sharing poly commits");
       }
 
@@ -459,12 +455,12 @@ export class MockServer {
         const ind = new BN(b.server_index);
         _gDec = _gDec.add(gBX.mul(ind.pow(new BN(j))));
       }
-      if (!gDec.x.eq(_gDec.x) || !gDec.y.eq(_gDec.y)) {
+      if (!gDec.getX().eq(_gDec.getX()) || !gDec.getY().eq(_gDec.getY())) {
         throw new Error("shares are inconsistent with the server poly commits");
       }
       const factorEncs = await Promise.all(
         factorPubs.map((pub) => {
-          return encrypt(Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"), Buffer.from(dec.toString(16, 64), "hex"));
+          return encrypt(pub, Buffer.from(dec.toString(16, 64), "hex"));
         })
       );
       data.push({ encs: factorEncs });

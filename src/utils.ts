@@ -1,9 +1,13 @@
-import { decrypt as ecDecrypt, encrypt as ecEncrypt, generatePrivate } from "@toruslabs/eccrypto";
+import { decrypt as ecDecrypt, encrypt as ecEncrypt, generatePrivate as ecGeneratePrivate, getPublic as ecGetPublic } from "@toruslabs/eccrypto";
 import BN from "bn.js";
-import { ec as EC } from "elliptic";
+import { curve, ec as EC } from "elliptic";
 
-const ec = new EC("secp256k1");
+const ec = new EC("ed25519");
 export const ecCurve = ec;
+export function genPrivateKey() {
+  const k = ecCurve.genKeyPair();
+  return k.getPrivate();
+}
 
 export type PointHex = {
   x: string | null;
@@ -20,21 +24,18 @@ export function randomSelection(arr: number[], num: number): number[] {
   return selected;
 }
 
-export function ecPoint(p: PointHex): any {
+export function ecPoint(p: PointHex): curve.base.BasePoint {
   if (p.x === null && p.y === null) {
     return ec.curve.g.add(ec.curve.g.neg());
   }
   return ec.keyFromPublic({ x: p.x.padStart(64, "0"), y: p.y.padStart(64, "0") }).getPublic();
 }
 
-export function hexPoint(p: any): PointHex {
-  if (p.x === null || p.y === null) {
-    if (p.x === null && p.y === null) {
-      return { x: null, y: null };
-    }
-    throw new Error("could not serialize into PointHex");
+export function hexPoint(p: curve.base.BasePoint): PointHex {
+  if (p.isInfinity()) {
+    return { x: null, y: null };
   }
-  return { x: p.x.toString(16, 64), y: p.y.toString(16, 64) };
+  return { x: p.getX().toString(16, 64), y: p.getY().toString(16, 64) };
 }
 
 export type EncryptedMessage = {
@@ -43,6 +44,20 @@ export type EncryptedMessage = {
   iv: string;
   mac: string;
 };
+
+export type EncryptionKey = Buffer;
+export type DecryptionKey = Buffer;
+
+export type EncryptionKeyPair = {
+  sk: EncryptionKey;
+  pk: DecryptionKey;
+};
+
+export function genEncKeyPair(): EncryptionKeyPair {
+  const sk = ecGeneratePrivate();
+  const pk = ecGetPublic(sk);
+  return { sk, pk };
+}
 
 // Wrappers around ECC encrypt/decrypt to use the hex serialization
 export async function encrypt(publicKey: Buffer, msg: Buffer): Promise<EncryptedMessage> {
@@ -62,7 +77,6 @@ export async function decrypt(privKey: Buffer, msg: EncryptedMessage): Promise<B
     iv: Buffer.from(msg.iv, "hex"),
     mac: Buffer.from(msg.mac, "hex"),
   };
-
   return ecDecrypt(privKey, bufferEncDetails);
 }
 
@@ -74,7 +88,7 @@ export function generatePolynomial(degree: number, yIntercept: BN): BN[] {
     i++;
   }
   for (; i <= degree; i++) {
-    res.push(new BN(generatePrivate()));
+    res.push(genPrivateKey());
   }
   return res;
 }
