@@ -298,18 +298,10 @@ export class RSSClient {
       const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
-      if (
-        _tssPubKey.getX().toString(16, 64) !== ecPoint(this.tssPubKey).getX().toString(16, 64) ||
-        _tssPubKey.getY().toString(16, 64) !== ecPoint(this.tssPubKey).getY().toString(16, 64)
-      )
-        throw new Error("master poly commits inconsistent with tssPubKey");
+      if (!_tssPubKey.eq(ecPoint(this.tssPubKey))) throw new Error("master poly commits inconsistent with tssPubKey");
 
       // check server poly commits are consistent with master poly commits
-      if (
-        mc[0].add(mc[1]).getX().toString(16, 64) !== sc[0].getX().toString(16, 64) ||
-        mc[0].add(mc[1]).getY().toString(16, 64) !== sc[0].getY().toString(16, 64)
-      )
-        throw new Error("server poly commits inconsistent with master poly commits");
+      if (!mc[0].add(mc[1]).eq(sc[0])) throw new Error("server poly commits inconsistent with master poly commits");
       return null;
     });
 
@@ -322,8 +314,7 @@ export class RSSClient {
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
       const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
-      if (gU.getX().toString(16, 64) !== _gU.getX().toString(16, 64) || gU.getY().toString(16, 64) !== _gU.getY().toString(16, 64))
-        throw new Error("decrypted user shares inconsistent with poly commits");
+      if (!gU.eq(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
     }
 
