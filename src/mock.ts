@@ -84,7 +84,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   // TODO: check server_index independently, against the registered node list
 
   if (b.server_index <= 0 || b.server_index > servers_info.pubkeys.length) throw new Error("server index out of bounds");
-  if (servers_info.selected.filter((selectedIndex) => selectedIndex <= 0 || b.server_index > servers_info.pubkeys.length).length > 0)
+  if (servers_info.selected.filter((selectedIndex) => selectedIndex <= 0 || selectedIndex > servers_info.pubkeys.length).length > 0)
     throw new Error("selected indexes out of bounds");
   if (servers_info.selected.indexOf(b.server_index) === -1) throw new Error("unselected server, should not have received rss round 1 message");
 
