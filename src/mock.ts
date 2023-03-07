@@ -282,6 +282,7 @@ export class MockServer {
     if (path === "/private_key") {
       const privKey = data.private_key;
       this.store.privKey = privKey;
+      this.pubKey = hexPoint(ecCurve.g.mul(privKey));
       return {};
     }
     if (path === "/get_tss_nonce") {
