@@ -380,6 +380,7 @@ export class RSSClient {
         }).catch((e) => log.error(e));
       })
     );
+    if (serverFactorEncs.filter((s) => s).length < this.serverThreshold) throw new Error("not enough servers responded");
 
     const factorEncs: RefreshResponse[] = [];
     for (let i = 0; i < targetIndexes.length; i++) {
