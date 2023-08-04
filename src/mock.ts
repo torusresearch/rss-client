@@ -69,7 +69,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   if (!Array.isArray(b.target_index) || b.target_index.filter((elem) => elem !== 2 && elem !== 3).length > 0) {
     throw new Error("invalid target index, only 2, 3 allowed");
   }
-  if (b.old_user_share_index !== 2 && b.old_user_share_index !== 3) {
+  if (b.server_set === "old" && b.old_user_share_index !== 2 && b.old_user_share_index !== 3) {
     throw new Error("invalid index for user share");
   }
 
@@ -314,7 +314,7 @@ export class MockServer {
     if (!Array.isArray(b.target_index) || b.target_index.filter((elem) => elem !== 2 && elem !== 3).length > 0) {
       throw new Error("invalid target index, only 2, 3 allowed");
     }
-    if (b.old_user_share_index !== 2 && b.old_user_share_index !== 3) {
+    if (b.server_set === "old" && b.old_user_share_index !== 2 && b.old_user_share_index !== 3) {
       throw new Error("invalid index for user share");
     }
 
