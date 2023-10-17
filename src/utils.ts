@@ -20,13 +20,14 @@ export function randomSelection(arr: number[], num: number): number[] {
   return selected;
 }
 
-export function ecPoint(p: PointHex): any {
+export function ecPoint(p: PointHex) {
   if (p.x === null && p.y === null) {
     return ec.curve.g.add(ec.curve.g.neg());
   }
   return ec.keyFromPublic({ x: p.x.padStart(64, "0"), y: p.y.padStart(64, "0") }).getPublic();
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function hexPoint(p: any): PointHex {
   if (p.x === null || p.y === null) {
     if (p.x === null && p.y === null) {

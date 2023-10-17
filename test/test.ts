@@ -2,7 +2,6 @@ import { generatePrivate } from "@toruslabs/eccrypto";
 import assert from "assert";
 import BN from "bn.js";
 import log from "loglevel";
-import * as fetch from "node-fetch";
 
 import { dotProduct, ecCurve, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, postEndpoint, recover, RSSClient } from "../src";
 import { MockServer } from "../src/mock";
@@ -27,7 +26,7 @@ describe("RSS Client", function () {
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
     const serverCount = serverEndpoints.length;
 
-    const serverPrivKeys = [];
+    const serverPrivKeys: BN[] = [];
     for (let i = 0; i < serverCount; i++) {
       serverPrivKeys.push(new BN(generatePrivate()));
     }
@@ -109,7 +108,7 @@ describe("RSS Client", function () {
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
     const serverCount = serverEndpoints.length;
 
-    const serverPrivKeys = [];
+    const serverPrivKeys: BN[] = [];
     for (let i = 0; i < serverCount; i++) {
       serverPrivKeys.push(new BN(generatePrivate()));
     }

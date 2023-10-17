@@ -18,11 +18,16 @@ import {
 } from "./utils";
 
 export interface IMockServer {
-  get(path: string): Promise<any>;
-  post(path: string, data?: Data): Promise<any>;
+  get(path: string): Promise<unknown>;
+  post(path: string, data?: Data): Promise<unknown>;
 }
 
-export function getEndpoint<T>(endpoint: string | IMockServer, path: string, options_?: RequestInit, customOptions?: CustomOptions): Promise<any> {
+export function getEndpoint<T>(
+  endpoint: string | IMockServer,
+  path: string,
+  options_?: RequestInit,
+  customOptions?: CustomOptions
+): Promise<unknown> {
   if (typeof endpoint === "string") {
     return get<T>(`${endpoint}${path}`, options_, customOptions);
   }
@@ -35,17 +40,17 @@ export function postEndpoint<T>(
   data?: Data,
   options_?: RequestInit,
   customOptions?: CustomOptions
-): Promise<any> {
+): Promise<T> {
   if (typeof endpoint === "string") {
     return post<T>(`${endpoint}${path}`, data, options_, customOptions);
   }
-  return endpoint.post(path, data);
+  return endpoint.post(path, data) as Promise<T>;
 }
 
 export type ImportOptions = {
   importKey: BN;
   newLabel: string;
-  sigs: any[];
+  sigs: string[];
   dkgNewPub: PointHex;
   targetIndexes: number[];
   selectedServers: number[];
@@ -69,7 +74,7 @@ export type ServersInfo = {
 export type RefreshOptions = {
   oldLabel: string;
   newLabel: string;
-  sigs: any[];
+  sigs: string[];
   dkgNewPub: PointHex;
   inputShare: BN;
   inputIndex: number;
@@ -123,6 +128,12 @@ export type RecoverOptions = {
 export type RecoverResponse = {
   tssShare: BN;
 };
+
+export type IData = {
+  master_poly_commits: PointHex[];
+  server_poly_commits: PointHex[];
+  target_encryptions: { user_enc: EncryptedMessage; server_encs: EncryptedMessage[] };
+}[];
 
 export class RSSClient {
   tssPubKey: PointHex;
@@ -214,7 +225,7 @@ export class RSSClient {
       );
 
       const _serverPoly = _serverPolys[i];
-      const _serverEnc = _serverEncs[i];
+      const _serverEnc: EncryptedMessage[] = _serverEncs[i];
       for (let j = 0; j < serversInfo.pubkeys.length; j++) {
         const _pub = serversInfo.pubkeys[j];
         _serverEnc.push(
@@ -225,7 +236,7 @@ export class RSSClient {
         );
       }
     }
-    const _data = [];
+    const _data: IData = [];
     for (let i = 0; i < targetIndexes.length; i++) {
       _data.push({
         master_poly_commits: _masterPolyCommits[i],
@@ -248,7 +259,7 @@ export class RSSClient {
     );
 
     // await responses
-    const rssRound1Responses = await Promise.all(rssRound1Proms);
+    const rssRound1Responses = (await Promise.all(rssRound1Proms)) as RSSRound1Response[];
 
     // sum up all master poly commits and sum up all server poly commits
     const sums = targetIndexes.map((_, i) => {
@@ -348,7 +359,7 @@ export class RSSClient {
     const serverFactorEncs = await Promise.all(
       serverIndexes.map((ind) => {
         // TODO: specify it's "new" server set for server indexes
-        const data = [];
+        const data: { master_commits: PointHex[]; server_commits: PointHex[]; server_encs: EncryptedMessage[]; factor_pubkeys: PointHex[] }[] = [];
         targetIndexes.map((_, i) => {
           const { mc, sc } = sums[i];
           const round2RequestData = {
@@ -470,7 +481,7 @@ export class RSSClient {
       );
 
       const _serverPoly = _serverPolys[i];
-      const _serverEnc = _serverEncs[i];
+      const _serverEnc: EncryptedMessage[] = _serverEncs[i];
       for (let j = 0; j < serversInfo.pubkeys.length; j++) {
         const _pub = serversInfo.pubkeys[j];
         _serverEnc.push(
@@ -481,7 +492,7 @@ export class RSSClient {
         );
       }
     }
-    const _data = [];
+    const _data: IData = [];
     for (let i = 0; i < targetIndexes.length; i++) {
       _data.push({
         master_poly_commits: _masterPolyCommits[i],
@@ -504,7 +515,7 @@ export class RSSClient {
     );
 
     // await responses
-    const rssRound1Responses = await Promise.all(rssRound1Proms);
+    const rssRound1Responses = (await Promise.all(rssRound1Proms)) as RSSRound1Response[];
 
     // sum up all master poly commits and sum up all server poly commits
     const sums = targetIndexes.map((_, i) => {
@@ -602,7 +613,7 @@ export class RSSClient {
     const serverFactorEncs = await Promise.all(
       serverIndexes.map((ind) => {
         // TODO: specify it's "new" server set for server indexes
-        const data = [];
+        const data: { master_commits: PointHex[]; server_commits: PointHex[]; server_encs: EncryptedMessage[]; factor_pubkeys: PointHex[] }[] = [];
         targetIndexes.map((_, i) => {
           const { mc, sc } = sums[i];
           const round2RequestData = {
