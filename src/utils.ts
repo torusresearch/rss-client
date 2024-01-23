@@ -1,6 +1,6 @@
 import { decrypt as ecDecrypt, encrypt as ecEncrypt, generatePrivate } from "@toruslabs/eccrypto";
 import BN from "bn.js";
-import { ec as EC } from "elliptic";
+import { curve, ec as EC } from "elliptic";
 
 const ec = new EC("secp256k1");
 export const ecCurve = ec;
@@ -20,22 +20,18 @@ export function randomSelection(arr: number[], num: number): number[] {
   return selected;
 }
 
-export function ecPoint(p: PointHex) {
+export function ecPoint(p: PointHex): curve.base.BasePoint {
   if (p.x === null && p.y === null) {
     return ec.curve.g.add(ec.curve.g.neg());
   }
   return ec.keyFromPublic({ x: p.x.padStart(64, "0"), y: p.y.padStart(64, "0") }).getPublic();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function hexPoint(p: any): PointHex {
-  if (p.x === null || p.y === null) {
-    if (p.x === null && p.y === null) {
-      return { x: null, y: null };
-    }
-    throw new Error("could not serialize into PointHex");
+export function hexPoint(p: curve.base.BasePoint): PointHex {
+  if (p.isInfinity()) {
+    return { x: null, y: null };
   }
-  return { x: p.x.toString(16, 64), y: p.y.toString(16, 64) };
+  return { x: p.getX().toString(16, 64), y: p.getY().toString(16, 64) };
 }
 
 export type EncryptedMessage = {

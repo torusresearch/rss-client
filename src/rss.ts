@@ -1,6 +1,7 @@
 import { generatePrivate } from "@toruslabs/eccrypto";
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
+import { curve } from "elliptic";
 import log from "loglevel";
 
 import {
@@ -136,11 +137,11 @@ export type IData = {
 }[];
 
 export class RSSClient {
-  tssPubKey: PointHex;
+  tssPubKey: curve.base.BasePoint;
 
   tempPrivKey: BN;
 
-  tempPubKey: PointHex;
+  tempPubKey: curve.base.BasePoint;
 
   serverEndpoints: string[] | IMockServer[];
 
@@ -149,7 +150,7 @@ export class RSSClient {
   serverPubKeys: PointHex[];
 
   constructor(opts: RSSClientOptions) {
-    this.tssPubKey = opts.tssPubKey;
+    this.tssPubKey = ecPoint(opts.tssPubKey);
     this.serverEndpoints = opts.serverEndpoints;
     this.serverThreshold = opts.serverThreshold;
     this.serverPubKeys = opts.serverPubKeys;
@@ -270,8 +271,8 @@ export class RSSClient {
         if (serverPolyCommits.length !== this.serverThreshold) throw new Error("incorrect number of coeffs for server poly commits");
       }
 
-      let sumMasterPolyCommits = [];
-      let sumServerPolyCommits = [];
+      let sumMasterPolyCommits: curve.base.BasePoint[] = [];
+      let sumServerPolyCommits: curve.base.BasePoint[] = [];
 
       for (let j = 0; j < rssRound1Responses.length; j++) {
         const rssRound1ResponseData = rssRound1Responses[j].data[i];
@@ -302,15 +303,10 @@ export class RSSClient {
       const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
-      if (
-        _tssPubKey.x.toString(16, 64) !== ecPoint(this.tssPubKey).x.toString(16, 64) ||
-        _tssPubKey.y.toString(16, 64) !== ecPoint(this.tssPubKey).y.toString(16, 64)
-      )
-        throw new Error("master poly commits inconsistent with tssPubKey");
+      if (!_tssPubKey.eq(this.tssPubKey)) throw new Error("master poly commits inconsistent with tssPubKey");
 
       // check server poly commits are consistent with master poly commits
-      if (mc[0].add(mc[1]).x.toString(16, 64) !== sc[0].x.toString(16, 64) || mc[0].add(mc[1]).y.toString(16, 64) !== sc[0].y.toString(16, 64))
-        throw new Error("server poly commits inconsistent with master poly commits");
+      if (!mc[0].add(mc[1]).eq(sc[0])) throw new Error("server poly commits inconsistent with master poly commits");
       return null;
     });
 
@@ -324,8 +320,7 @@ export class RSSClient {
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
       const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
-      if (gU.x.toString(16, 64) !== _gU.x.toString(16, 64) || gU.y.toString(16, 64) !== _gU.y.toString(16, 64))
-        throw new Error("decrypted user shares inconsistent with poly commits");
+      if (!gU.eq(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
     }
 
@@ -526,8 +521,8 @@ export class RSSClient {
         if (serverPolyCommits.length !== this.serverThreshold) throw new Error("incorrect number of coeffs for server poly commits");
       }
 
-      let sumMasterPolyCommits = [];
-      let sumServerPolyCommits = [];
+      let sumMasterPolyCommits: curve.base.BasePoint[] = [];
+      let sumServerPolyCommits: curve.base.BasePoint[] = [];
 
       for (let j = 0; j < rssRound1Responses.length; j++) {
         const rssRound1ResponseData = rssRound1Responses[j].data[i];
@@ -558,15 +553,10 @@ export class RSSClient {
       const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
-      if (
-        _tssPubKey.x.toString(16, 64) !== ecPoint(this.tssPubKey).x.toString(16, 64) ||
-        _tssPubKey.y.toString(16, 64) !== ecPoint(this.tssPubKey).y.toString(16, 64)
-      )
-        throw new Error("master poly commits inconsistent with tssPubKey");
+      if (!_tssPubKey.eq(this.tssPubKey)) throw new Error("master poly commits inconsistent with tssPubKey");
 
       // check server poly commits are consistent with master poly commits
-      if (mc[0].add(mc[1]).x.toString(16, 64) !== sc[0].x.toString(16, 64) || mc[0].add(mc[1]).y.toString(16, 64) !== sc[0].y.toString(16, 64))
-        throw new Error("server poly commits inconsistent with master poly commits");
+      if (!mc[0].add(mc[1]).eq(sc[0])) throw new Error("server poly commits inconsistent with master poly commits");
       return null;
     });
 
@@ -580,8 +570,7 @@ export class RSSClient {
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
       const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
-      if (gU.x.toString(16, 64) !== _gU.x.toString(16, 64) || gU.y.toString(16, 64) !== _gU.y.toString(16, 64))
-        throw new Error("decrypted user shares inconsistent with poly commits");
+      if (!gU.eq(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
     }
 
