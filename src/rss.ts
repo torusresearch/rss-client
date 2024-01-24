@@ -1,4 +1,3 @@
-import { generatePrivate } from "@toruslabs/eccrypto";
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
 import { curve } from "elliptic";
@@ -8,6 +7,7 @@ import {
   decrypt,
   dotProduct,
   ecCurve,
+  ecCurveSecp256k1,
   ecPoint,
   encrypt,
   EncryptedMessage,
@@ -156,10 +156,11 @@ export class RSSClient {
     this.serverPubKeys = opts.serverPubKeys;
     if (opts.tempKey) {
       this.tempPrivKey = opts.tempKey;
-      this.tempPubKey = ecCurve.g.mul(opts.tempKey);
+      this.tempPubKey = ecCurveSecp256k1.g.mul(opts.tempKey);
     } else {
-      this.tempPrivKey = new BN(generatePrivate());
-      this.tempPubKey = ecCurve.g.mul(this.tempPrivKey);
+      const kp = ecCurveSecp256k1.genKeyPair();
+      this.tempPrivKey = kp.getPrivate();
+      this.tempPubKey = kp.getPublic();
     }
   }
 

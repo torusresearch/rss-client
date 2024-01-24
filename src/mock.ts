@@ -2,7 +2,19 @@
 import BN from "bn.js";
 
 import { ServersInfo } from "./rss";
-import { decrypt, ecCurve, ecPoint, encrypt, EncryptedMessage, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, PointHex } from "./utils";
+import {
+  decrypt,
+  ecCurve,
+  ecCurveSecp256k1,
+  ecPoint,
+  encrypt,
+  EncryptedMessage,
+  generatePolynomial,
+  getLagrangeCoeffs,
+  getShare,
+  hexPoint,
+  PointHex,
+} from "./utils";
 
 type AuthData = {
   label: string;
@@ -283,7 +295,7 @@ export class MockServer {
     if (path === "/private_key") {
       const privKey = data.private_key;
       this.store.privKey = privKey;
-      this.pubKey = hexPoint(ecCurve.g.mul(privKey));
+      this.pubKey = hexPoint(ecCurveSecp256k1.g.mul(privKey));
       return {};
     }
     if (path === "/get_tss_nonce") {

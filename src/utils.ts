@@ -1,9 +1,13 @@
-import { decrypt as ecDecrypt, encrypt as ecEncrypt, generatePrivate } from "@toruslabs/eccrypto";
+import { decrypt as ecDecrypt, encrypt as ecEncrypt } from "@toruslabs/eccrypto";
 import BN from "bn.js";
 import { curve, ec as EC } from "elliptic";
 
-const ec = new EC("secp256k1");
-export const ecCurve = ec;
+export let ecCurve = new EC("secp256k1");
+export const ecCurveSecp256k1 = new EC("secp256k1");
+
+export function setCurve(name: string) {
+  ecCurve = new EC(name);
+}
 
 export type PointHex = {
   x: string | null;
@@ -22,9 +26,9 @@ export function randomSelection(arr: number[], num: number): number[] {
 
 export function ecPoint(p: PointHex): curve.base.BasePoint {
   if (p.x === null && p.y === null) {
-    return ec.curve.g.add(ec.curve.g.neg());
+    return ecCurve.curve.g.add(ecCurve.curve.g.neg());
   }
-  return ec.keyFromPublic({ x: p.x.padStart(64, "0"), y: p.y.padStart(64, "0") }).getPublic();
+  return ecCurve.keyFromPublic({ x: p.x.padStart(64, "0"), y: p.y.padStart(64, "0") }).getPublic();
 }
 
 export function hexPoint(p: curve.base.BasePoint): PointHex {
@@ -71,7 +75,7 @@ export function generatePolynomial(degree: number, yIntercept: BN): BN[] {
     i++;
   }
   for (; i <= degree; i++) {
-    res.push(new BN(generatePrivate()));
+    res.push(ecCurve.genKeyPair().getPrivate());
   }
   return res;
 }
@@ -79,9 +83,9 @@ export function getShare(polynomial: BN[], index: BN | number) {
   let res = new BN(0);
   for (let i = 0; i < polynomial.length; i++) {
     const term = polynomial[i].mul(new BN(index).pow(new BN(i)));
-    res = res.add(term.umod(ec.curve.n));
+    res = res.add(term.umod(ecCurve.curve.n));
   }
-  return res.umod(ec.curve.n);
+  return res.umod(ecCurve.curve.n);
 }
 
 export function dotProduct(arr1: BN[], arr2: BN[], modulus = new BN(0)) {
@@ -107,15 +111,15 @@ export function getLagrangeCoeffs(_allIndexes: number[] | BN[], _myIndex: number
   for (let j = 0; j < allIndexes.length; j += 1) {
     if (myIndex.cmp(allIndexes[j]) !== 0) {
       let tempUpper = target.sub(allIndexes[j]);
-      tempUpper = tempUpper.umod(ec.curve.n);
+      tempUpper = tempUpper.umod(ecCurve.curve.n);
       upper = upper.mul(tempUpper);
-      upper = upper.umod(ec.curve.n);
+      upper = upper.umod(ecCurve.curve.n);
       let tempLower = myIndex.sub(allIndexes[j]);
-      tempLower = tempLower.umod(ec.curve.n);
-      lower = lower.mul(tempLower).umod(ec.curve.n);
+      tempLower = tempLower.umod(ecCurve.curve.n);
+      lower = lower.mul(tempLower).umod(ecCurve.curve.n);
     }
   }
-  return upper.mul(lower.invm(ec.curve.n)).umod(ec.curve.n);
+  return upper.mul(lower.invm(ecCurve.curve.n)).umod(ecCurve.curve.n);
 }
 
 export function lagrangeInterpolation(shares: BN[], nodeIndex: BN[]) {
@@ -129,15 +133,15 @@ export function lagrangeInterpolation(shares: BN[], nodeIndex: BN[]) {
     for (let j = 0; j < shares.length; j += 1) {
       if (i !== j) {
         upper = upper.mul(nodeIndex[j].neg());
-        upper = upper.umod(ec.curve.n);
+        upper = upper.umod(ecCurve.curve.n);
         let temp = nodeIndex[i].sub(nodeIndex[j]);
-        temp = temp.umod(ec.curve.n);
-        lower = lower.mul(temp).umod(ec.curve.n);
+        temp = temp.umod(ecCurve.curve.n);
+        lower = lower.mul(temp).umod(ecCurve.curve.n);
       }
     }
-    let delta = upper.mul(lower.invm(ec.curve.n)).umod(ec.curve.n);
-    delta = delta.mul(shares[i]).umod(ec.curve.n);
+    let delta = upper.mul(lower.invm(ecCurve.curve.n)).umod(ecCurve.curve.n);
+    delta = delta.mul(shares[i]).umod(ecCurve.curve.n);
     secret = secret.add(delta);
   }
-  return secret.umod(ec.curve.n);
+  return secret.umod(ecCurve.curve.n);
 }
