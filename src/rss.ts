@@ -1,12 +1,13 @@
-import { generatePrivate } from "@toruslabs/eccrypto";
 import { CustomOptions, Data, get, post } from "@toruslabs/http-helpers";
 import BN from "bn.js";
+import { curve } from "elliptic";
 import log from "loglevel";
 
 import {
   decrypt,
   dotProduct,
   ecCurve,
+  ecCurveSecp256k1,
   ecPoint,
   encrypt,
   EncryptedMessage,
@@ -18,11 +19,16 @@ import {
 } from "./utils";
 
 export interface IMockServer {
-  get(path: string): Promise<any>;
-  post(path: string, data?: Data): Promise<any>;
+  get(path: string): Promise<unknown>;
+  post(path: string, data?: Data): Promise<unknown>;
 }
 
-export function getEndpoint<T>(endpoint: string | IMockServer, path: string, options_?: RequestInit, customOptions?: CustomOptions): Promise<any> {
+export function getEndpoint<T>(
+  endpoint: string | IMockServer,
+  path: string,
+  options_?: RequestInit,
+  customOptions?: CustomOptions
+): Promise<unknown> {
   if (typeof endpoint === "string") {
     return get<T>(`${endpoint}${path}`, options_, customOptions);
   }
@@ -35,17 +41,17 @@ export function postEndpoint<T>(
   data?: Data,
   options_?: RequestInit,
   customOptions?: CustomOptions
-): Promise<any> {
+): Promise<T> {
   if (typeof endpoint === "string") {
     return post<T>(`${endpoint}${path}`, data, options_, customOptions);
   }
-  return endpoint.post(path, data);
+  return endpoint.post(path, data) as Promise<T>;
 }
 
 export type ImportOptions = {
   importKey: BN;
   newLabel: string;
-  sigs: any[];
+  sigs: string[];
   dkgNewPub: PointHex;
   targetIndexes: number[];
   selectedServers: number[];
@@ -69,7 +75,7 @@ export type ServersInfo = {
 export type RefreshOptions = {
   oldLabel: string;
   newLabel: string;
-  sigs: any[];
+  sigs: string[];
   dkgNewPub: PointHex;
   inputShare: BN;
   inputIndex: number;
@@ -124,12 +130,18 @@ export type RecoverResponse = {
   tssShare: BN;
 };
 
+export type IData = {
+  master_poly_commits: PointHex[];
+  server_poly_commits: PointHex[];
+  target_encryptions: { user_enc: EncryptedMessage; server_encs: EncryptedMessage[] };
+}[];
+
 export class RSSClient {
-  tssPubKey: PointHex;
+  tssPubKey: curve.base.BasePoint;
 
   tempPrivKey: BN;
 
-  tempPubKey: PointHex;
+  tempPubKey: curve.base.BasePoint;
 
   serverEndpoints: string[] | IMockServer[];
 
@@ -138,16 +150,17 @@ export class RSSClient {
   serverPubKeys: PointHex[];
 
   constructor(opts: RSSClientOptions) {
-    this.tssPubKey = opts.tssPubKey;
+    this.tssPubKey = ecPoint(opts.tssPubKey);
     this.serverEndpoints = opts.serverEndpoints;
     this.serverThreshold = opts.serverThreshold;
     this.serverPubKeys = opts.serverPubKeys;
     if (opts.tempKey) {
       this.tempPrivKey = opts.tempKey;
-      this.tempPubKey = ecCurve.g.mul(opts.tempKey);
+      this.tempPubKey = ecCurveSecp256k1.g.mul(opts.tempKey);
     } else {
-      this.tempPrivKey = new BN(generatePrivate());
-      this.tempPubKey = ecCurve.g.mul(this.tempPrivKey);
+      const kp = ecCurveSecp256k1.genKeyPair();
+      this.tempPrivKey = kp.getPrivate();
+      this.tempPubKey = kp.getPublic();
     }
   }
 
@@ -214,7 +227,7 @@ export class RSSClient {
       );
 
       const _serverPoly = _serverPolys[i];
-      const _serverEnc = _serverEncs[i];
+      const _serverEnc: EncryptedMessage[] = _serverEncs[i];
       for (let j = 0; j < serversInfo.pubkeys.length; j++) {
         const _pub = serversInfo.pubkeys[j];
         _serverEnc.push(
@@ -225,7 +238,7 @@ export class RSSClient {
         );
       }
     }
-    const _data = [];
+    const _data: IData = [];
     for (let i = 0; i < targetIndexes.length; i++) {
       _data.push({
         master_poly_commits: _masterPolyCommits[i],
@@ -248,7 +261,7 @@ export class RSSClient {
     );
 
     // await responses
-    const rssRound1Responses = await Promise.all(rssRound1Proms);
+    const rssRound1Responses = (await Promise.all(rssRound1Proms)) as RSSRound1Response[];
 
     // sum up all master poly commits and sum up all server poly commits
     const sums = targetIndexes.map((_, i) => {
@@ -259,8 +272,8 @@ export class RSSClient {
         if (serverPolyCommits.length !== this.serverThreshold) throw new Error("incorrect number of coeffs for server poly commits");
       }
 
-      let sumMasterPolyCommits = [];
-      let sumServerPolyCommits = [];
+      let sumMasterPolyCommits: curve.base.BasePoint[] = [];
+      let sumServerPolyCommits: curve.base.BasePoint[] = [];
 
       for (let j = 0; j < rssRound1Responses.length; j++) {
         const rssRound1ResponseData = rssRound1Responses[j].data[i];
@@ -291,15 +304,10 @@ export class RSSClient {
       const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
-      if (
-        _tssPubKey.x.toString(16, 64) !== ecPoint(this.tssPubKey).x.toString(16, 64) ||
-        _tssPubKey.y.toString(16, 64) !== ecPoint(this.tssPubKey).y.toString(16, 64)
-      )
-        throw new Error("master poly commits inconsistent with tssPubKey");
+      if (!_tssPubKey.eq(this.tssPubKey)) throw new Error("master poly commits inconsistent with tssPubKey");
 
       // check server poly commits are consistent with master poly commits
-      if (mc[0].add(mc[1]).x.toString(16, 64) !== sc[0].x.toString(16, 64) || mc[0].add(mc[1]).y.toString(16, 64) !== sc[0].y.toString(16, 64))
-        throw new Error("server poly commits inconsistent with master poly commits");
+      if (!mc[0].add(mc[1]).eq(sc[0])) throw new Error("server poly commits inconsistent with master poly commits");
       return null;
     });
 
@@ -313,8 +321,7 @@ export class RSSClient {
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
       const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
-      if (gU.x.toString(16, 64) !== _gU.x.toString(16, 64) || gU.y.toString(16, 64) !== _gU.y.toString(16, 64))
-        throw new Error("decrypted user shares inconsistent with poly commits");
+      if (!gU.eq(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
     }
 
@@ -348,7 +355,7 @@ export class RSSClient {
     const serverFactorEncs = await Promise.all(
       serverIndexes.map((ind) => {
         // TODO: specify it's "new" server set for server indexes
-        const data = [];
+        const data: { master_commits: PointHex[]; server_commits: PointHex[]; server_encs: EncryptedMessage[]; factor_pubkeys: PointHex[] }[] = [];
         targetIndexes.map((_, i) => {
           const { mc, sc } = sums[i];
           const round2RequestData = {
@@ -470,7 +477,7 @@ export class RSSClient {
       );
 
       const _serverPoly = _serverPolys[i];
-      const _serverEnc = _serverEncs[i];
+      const _serverEnc: EncryptedMessage[] = _serverEncs[i];
       for (let j = 0; j < serversInfo.pubkeys.length; j++) {
         const _pub = serversInfo.pubkeys[j];
         _serverEnc.push(
@@ -481,7 +488,7 @@ export class RSSClient {
         );
       }
     }
-    const _data = [];
+    const _data: IData = [];
     for (let i = 0; i < targetIndexes.length; i++) {
       _data.push({
         master_poly_commits: _masterPolyCommits[i],
@@ -504,7 +511,7 @@ export class RSSClient {
     );
 
     // await responses
-    const rssRound1Responses = await Promise.all(rssRound1Proms);
+    const rssRound1Responses = (await Promise.all(rssRound1Proms)) as RSSRound1Response[];
 
     // sum up all master poly commits and sum up all server poly commits
     const sums = targetIndexes.map((_, i) => {
@@ -515,8 +522,8 @@ export class RSSClient {
         if (serverPolyCommits.length !== this.serverThreshold) throw new Error("incorrect number of coeffs for server poly commits");
       }
 
-      let sumMasterPolyCommits = [];
-      let sumServerPolyCommits = [];
+      let sumMasterPolyCommits: curve.base.BasePoint[] = [];
+      let sumServerPolyCommits: curve.base.BasePoint[] = [];
 
       for (let j = 0; j < rssRound1Responses.length; j++) {
         const rssRound1ResponseData = rssRound1Responses[j].data[i];
@@ -547,15 +554,10 @@ export class RSSClient {
       const temp1 = ecPoint(dkgNewPub).mul(getLagrangeCoeffs([1, target], 1));
       const temp2 = mc[0].mul(getLagrangeCoeffs([1, target], target));
       const _tssPubKey = temp1.add(temp2);
-      if (
-        _tssPubKey.x.toString(16, 64) !== ecPoint(this.tssPubKey).x.toString(16, 64) ||
-        _tssPubKey.y.toString(16, 64) !== ecPoint(this.tssPubKey).y.toString(16, 64)
-      )
-        throw new Error("master poly commits inconsistent with tssPubKey");
+      if (!_tssPubKey.eq(this.tssPubKey)) throw new Error("master poly commits inconsistent with tssPubKey");
 
       // check server poly commits are consistent with master poly commits
-      if (mc[0].add(mc[1]).x.toString(16, 64) !== sc[0].x.toString(16, 64) || mc[0].add(mc[1]).y.toString(16, 64) !== sc[0].y.toString(16, 64))
-        throw new Error("server poly commits inconsistent with master poly commits");
+      if (!mc[0].add(mc[1]).eq(sc[0])) throw new Error("server poly commits inconsistent with master poly commits");
       return null;
     });
 
@@ -569,8 +571,7 @@ export class RSSClient {
       const { mc } = sums[i];
       const gU = ecCurve.g.mul(userShare);
       const _gU = mc[0].add(mc[1].mul(new BN(99))); // master poly evaluated at x = 99
-      if (gU.x.toString(16, 64) !== _gU.x.toString(16, 64) || gU.y.toString(16, 64) !== _gU.y.toString(16, 64))
-        throw new Error("decrypted user shares inconsistent with poly commits");
+      if (!gU.eq(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
       userShares.push(userShare);
     }
 
@@ -602,7 +603,7 @@ export class RSSClient {
     const serverFactorEncs = await Promise.all(
       serverIndexes.map((ind) => {
         // TODO: specify it's "new" server set for server indexes
-        const data = [];
+        const data: { master_commits: PointHex[]; server_commits: PointHex[]; server_encs: EncryptedMessage[]; factor_pubkeys: PointHex[] }[] = [];
         targetIndexes.map((_, i) => {
           const { mc, sc } = sums[i];
           const round2RequestData = {

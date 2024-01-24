@@ -1,0 +1,26 @@
+name: CI
+
+on: pull_request
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        
+      - name: Test (default curve)
+        run: npm test
+      
+      - name: Test (ed25519)
+        run: CURVE=ed25519 npm test
