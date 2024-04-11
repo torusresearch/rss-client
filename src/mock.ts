@@ -1,20 +1,24 @@
 /* eslint-disable camelcase */
 import BN from "bn.js";
+import { ec as EC } from "elliptic";
 
 import { ServersInfo } from "./rss";
 import {
   decrypt,
-  ecCurve,
   ecCurveSecp256k1,
   ecPoint,
   encrypt,
   EncryptedMessage,
   generatePolynomial,
-  getLagrangeCoeffs,
+  getLagrangeCoeff,
   getShare,
   hexPoint,
   PointHex,
 } from "./utils";
+
+const { CURVE } = process.env;
+const ecCurve = new EC(CURVE || "secp256k1");
+const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
 type AuthData = {
   label: string;
@@ -104,16 +108,16 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   let finalLagrangeCoeffs;
   if (b.server_set === "old") {
     // firstly, calculate lagrange coefficient for own server sharing poly
-    let L = getLagrangeCoeffs(servers_info.selected, b.server_index, 0);
+    let L = getLagrangeCoeff(servers_info.selected, b.server_index, 0, ecCurve.n);
     // secondly, calculate lagrange coefficient for master sharing poly
-    L = L.mul(getLagrangeCoeffs([1, b.old_user_share_index], 1, 0)).umod(ecCurve.n);
+    L = L.mul(getLagrangeCoeff([1, b.old_user_share_index], 1, 0, ecCurve.n)).umod(ecCurve.n);
     // thirdly, calculate lagrange coefficient for new master sharing poly
-    finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeffs([0, 1], 0, target)).umod(ecCurve.n));
+    finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeff([0, 1], 0, target, ecCurve.n)).umod(ecCurve.n));
   } else {
     // firstly, calculate lagrange coefficient for own server sharing poly
-    const L = getLagrangeCoeffs(servers_info.selected, b.server_index, 0);
+    const L = getLagrangeCoeff(servers_info.selected, b.server_index, 0, ecCurve.n);
     // secondly, calculate lagrange coefficient for master sharing poly
-    finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeffs([0, 1], 1, target)).umod(ecCurve.n));
+    finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeff([0, 1], 1, target, ecCurve.n)).umod(ecCurve.n));
   }
 
   // retrieve server tss subshare from db
@@ -126,7 +130,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
 
   for (let i = 0; i < finalLagrangeCoeffs.length; i++) {
     const lc = finalLagrangeCoeffs[i];
-    const m = generatePolynomial(1, lc.mul(tssServerShare).umod(ecCurve.n));
+    const m = generatePolynomial(1, lc.mul(tssServerShare).umod(ecCurve.n), genRandomScalar);
     masterPolys.push(m);
     masterPolyCommits.push(
       m.map((coeff) => {
@@ -134,7 +138,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
         return hexPoint(gCoeff);
       })
     );
-    const s = generatePolynomial(b.new_servers_info.threshold - 1, getShare(m, 1));
+    const s = generatePolynomial(b.new_servers_info.threshold - 1, getShare(m, 1, ecCurve.n), genRandomScalar);
     serverPolys.push(s);
     serverPolyCommits.push(s.map((coeff) => hexPoint(ecCurve.g.mul(coeff))));
   }
@@ -151,7 +155,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
     userEncs.push(
       await encrypt(
         Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
-        Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex")
+        Buffer.from(getShare(masterPoly, 99, ecCurve.n).toString(16, 64), "hex")
       )
     );
 
@@ -162,7 +166,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
       serverEnc.push(
         await encrypt(
           Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")
+          Buffer.from(getShare(serverPoly, j + 1, ecCurve.n).toString(16, 64), "hex")
         )
       );
     }
@@ -200,8 +204,8 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
     const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
     // TODO: check that the same factorPub is not used for multiple shares
 
-    const masterCommits = b.data[i].master_commits.map(ecPoint);
-    const serverCommits = b.data[i].server_commits.map(ecPoint);
+    const masterCommits = b.data[i].master_commits.map((p) => ecPoint(ecCurve, p));
+    const serverCommits = b.data[i].server_commits.map((p) => ecPoint(ecCurve, p));
 
     const gB0 = masterCommits[0].add(masterCommits[1]);
     const _gB0 = serverCommits[0];
@@ -350,16 +354,16 @@ export class MockServer {
     let finalLagrangeCoeffs;
     if (b.server_set === "old") {
       // firstly, calculate lagrange coefficient for own server sharing poly
-      let L = getLagrangeCoeffs(servers_info.selected, b.server_index, 0);
+      let L = getLagrangeCoeff(servers_info.selected, b.server_index, 0, ecCurve.n);
       // secondly, calculate lagrange coefficient for master sharing poly
-      L = L.mul(getLagrangeCoeffs([1, b.old_user_share_index], 1, 0)).umod(ecCurve.n);
+      L = L.mul(getLagrangeCoeff([1, b.old_user_share_index], 1, 0, ecCurve.n)).umod(ecCurve.n);
       // thirdly, calculate lagrange coefficient for new master sharing poly
-      finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeffs([0, 1], 0, target)).umod(ecCurve.n));
+      finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeff([0, 1], 0, target, ecCurve.n)).umod(ecCurve.n));
     } else {
       // firstly, calculate lagrange coefficient for own server sharing poly
-      const L = getLagrangeCoeffs(servers_info.selected, b.server_index, 0);
+      const L = getLagrangeCoeff(servers_info.selected, b.server_index, 0, ecCurve.n);
       // secondly, calculate lagrange coefficient for master sharing poly
-      finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeffs([0, 1], 1, target)).umod(ecCurve.n));
+      finalLagrangeCoeffs = b.target_index.map((target) => L.mul(getLagrangeCoeff([0, 1], 1, target, ecCurve.n)).umod(ecCurve.n));
     }
 
     // retrieve server tss subshare from db
@@ -372,7 +376,7 @@ export class MockServer {
 
     for (let i = 0; i < finalLagrangeCoeffs.length; i++) {
       const lc = finalLagrangeCoeffs[i];
-      const m = generatePolynomial(1, lc.mul(tssServerShare).umod(ecCurve.n));
+      const m = generatePolynomial(1, lc.mul(tssServerShare).umod(ecCurve.n), genRandomScalar);
       masterPolys.push(m);
       masterPolyCommits.push(
         m.map((coeff) => {
@@ -380,7 +384,7 @@ export class MockServer {
           return hexPoint(gCoeff);
         })
       );
-      const s = generatePolynomial(b.new_servers_info.threshold - 1, getShare(m, 1));
+      const s = generatePolynomial(b.new_servers_info.threshold - 1, getShare(m, 1, ecCurve.n), genRandomScalar);
       serverPolys.push(s);
       serverPolyCommits.push(s.map((coeff) => hexPoint(ecCurve.g.mul(coeff))));
     }
@@ -397,7 +401,7 @@ export class MockServer {
       userEncs.push(
         await encrypt(
           Buffer.from(`04${b.user_temp_pubkey.x.padStart(64, "0")}${b.user_temp_pubkey.y.padStart(64, "0")}`, "hex"),
-          Buffer.from(getShare(masterPoly, 99).toString(16, 64), "hex") // Note: this is because 99 is the hardcoded value when doing rss DKG hierarchical sharing
+          Buffer.from(getShare(masterPoly, 99, ecCurve.n).toString(16, 64), "hex") // Note: this is because 99 is the hardcoded value when doing rss DKG hierarchical sharing
         )
       );
 
@@ -408,7 +412,7 @@ export class MockServer {
         serverEnc.push(
           await encrypt(
             Buffer.from(`04${pub.x.padStart(64, "0")}${pub.y.padStart(64, "0")}`, "hex"),
-            Buffer.from(getShare(serverPoly, j + 1).toString(16, 64), "hex")
+            Buffer.from(getShare(serverPoly, j + 1, ecCurve.n).toString(16, 64), "hex")
           )
         );
       }
@@ -446,8 +450,8 @@ export class MockServer {
       const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
       // TODO: check that the same factorPub is not used for multiple shares
 
-      const masterCommits = b.data[i].master_commits.map(ecPoint);
-      const serverCommits = b.data[i].server_commits.map(ecPoint);
+      const masterCommits = b.data[i].master_commits.map((p) => ecPoint(ecCurve, p));
+      const serverCommits = b.data[i].server_commits.map((p) => ecPoint(ecCurve, p));
 
       const gB0 = masterCommits[0].add(masterCommits[1]);
       const _gB0 = serverCommits[0];

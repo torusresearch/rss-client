@@ -16,7 +16,9 @@
     "build": "torus-scripts build",
     "release": "torus-scripts release",
     "prepack": "npm run build",
-    "test": "mocha",
+    "test:secp256k1": "CURVE=secp256k1 mocha",
+    "test:ed25519": "CURVE=ed25519 mocha",
+    "test": "npm run test:secp256k1 && npm run test:ed25519",
     "lint:ts": "eslint --fix 'src/**/*.ts'",
     "prepare": "husky install"
   },

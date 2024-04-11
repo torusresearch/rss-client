@@ -19,8 +19,5 @@ jobs:
       - name: Build
         run: npm run build
         
-      - name: Test (default curve)
+      - name: Test
         run: npm test
-      
-      - name: Test (ed25519)
-        run: CURVE=ed25519 npm test

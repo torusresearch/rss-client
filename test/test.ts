@@ -1,13 +1,14 @@
 import assert from "assert";
+import { ec as EC } from "elliptic";
 import log from "loglevel";
 
-import { dotProduct, ecCurve, ecCurveSecp256k1, generatePolynomial, getLagrangeCoeffs, getShare, hexPoint, postEndpoint, recover, RSSClient, setCurve } from "../src";
+import { dotProduct, ecCurveSecp256k1, generatePolynomial, getLagrangeCoeff, getShare, hexPoint, postEndpoint, recover, RSSClient } from "../src";
 import { MockServer } from "../src/mock";
-(globalThis as any).fetch = fetch;
 
-if (process.env.CURVE) {
-  setCurve(process.env.CURVE);
-}
+const { CURVE } = process.env;
+log.info("CURVE", CURVE);
+const ecCurve = new EC(CURVE || "secp256k1");
+const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
 describe("RSS Client", function () {
   // it("#should mock servers", async function() {
@@ -25,12 +26,12 @@ describe("RSS Client", function () {
     const testId = "test@test.com\u001cgoogle";
 
     const factorKeyPairs = [ecCurveSecp256k1.genKeyPair(), ecCurveSecp256k1.genKeyPair()];
-    const factorKeys = factorKeyPairs.map(kp => kp.getPrivate());
+    const factorKeys = factorKeyPairs.map((kp) => kp.getPrivate());
     const factorPubs = factorKeyPairs.map((kp) => hexPoint(kp.getPublic()));
-    
+
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
-    const serverKeyPairs = serverEndpoints.map(_ => ecCurveSecp256k1.genKeyPair());
-    const serverPrivKeys = serverKeyPairs.map(kp => kp.getPrivate());
+    const serverKeyPairs = serverEndpoints.map((_) => ecCurveSecp256k1.genKeyPair());
+    const serverPrivKeys = serverKeyPairs.map((kp) => kp.getPrivate());
     const serverPubKeys = serverKeyPairs.map((kp) => hexPoint(kp.getPublic()));
 
     await Promise.all(
@@ -38,9 +39,9 @@ describe("RSS Client", function () {
         return postEndpoint(endpoint, "/private_key", { private_key: serverPrivKeys[i].toString(16, 64) }).catch((e) => log.error(e));
       })
     );
-    
+
     const serverThreshold = 3;
-    const importKeyPair = ecCurve.genKeyPair(); 
+    const importKeyPair = ecCurve.genKeyPair();
     const importKey = importKeyPair.getPrivate();
     const tssPubKey = importKeyPair.getPublic();
 
@@ -48,10 +49,10 @@ describe("RSS Client", function () {
     const dkg2KeyPair = ecCurve.genKeyPair();
     const dkg2Priv = dkg2KeyPair.getPrivate();
     const dkg2Pub = dkg2KeyPair.getPublic();
-    const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv);
+    const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv, genRandomScalar);
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        const shareHex = getShare(serverPoly2, i + 1).toString(16, 64);
+        const shareHex = getShare(serverPoly2, i + 1, ecCurve.n).toString(16, 64);
 
         return postEndpoint(endpoint, "/tss_share", {
           label: `${testId}\u0015default\u00161`,
@@ -65,6 +66,7 @@ describe("RSS Client", function () {
       serverPubKeys,
       serverThreshold,
       tssPubKey: hexPoint(tssPubKey),
+      keyType: CURVE,
     });
     const targetIndexes = [2, 3];
     const refreshed = await rssClient.import({
@@ -84,6 +86,7 @@ describe("RSS Client", function () {
           serverEncs: r.serverFactorEncs,
           userEnc: r.userFactorEnc,
           selectedServers: [1, 2, 3],
+          keyType: CURVE,
         })
       )
     );
@@ -93,7 +96,7 @@ describe("RSS Client", function () {
     // check that shares are valid
 
     targetIndexes.map((target, i) => {
-      const interpolationLCs = [1, target].map((a) => getLagrangeCoeffs([1, target], a));
+      const interpolationLCs = [1, target].map((a) => getLagrangeCoeff([1, target], a, 0, ecCurve.n));
 
       const shares = [dkg2Priv, tssShares[i]];
 
@@ -111,12 +114,12 @@ describe("RSS Client", function () {
     const testId = "test@test.com\u001cgoogle";
 
     const factorKeyPairs = [ecCurveSecp256k1.genKeyPair(), ecCurveSecp256k1.genKeyPair()];
-    const factorKeys = factorKeyPairs.map(kp => kp.getPrivate());
+    const factorKeys = factorKeyPairs.map((kp) => kp.getPrivate());
     const factorPubs = factorKeyPairs.map((kp) => hexPoint(kp.getPublic()));
-    
+
     const serverEndpoints = [new MockServer(), new MockServer(), new MockServer(), new MockServer(), new MockServer()];
-    const serverKeyPairs = serverEndpoints.map(_ => ecCurveSecp256k1.genKeyPair());
-    const serverPrivKeys = serverKeyPairs.map(kp => kp.getPrivate());
+    const serverKeyPairs = serverEndpoints.map((_) => ecCurveSecp256k1.genKeyPair());
+    const serverPrivKeys = serverKeyPairs.map((kp) => kp.getPrivate());
     const serverPubKeys = serverKeyPairs.map((kp) => hexPoint(kp.getPublic()));
 
     await Promise.all(
@@ -131,17 +134,17 @@ describe("RSS Client", function () {
     const tssKeyPair = ecCurve.genKeyPair();
     const tssPrivKey = tssKeyPair.getPrivate();
     const tssPubKey = tssKeyPair.getPublic();
-    
-    const masterPoly = generatePolynomial(1, tssPrivKey);
-    const tss2 = getShare(masterPoly, inputIndex);
-    const serverPoly = generatePolynomial(serverThreshold - 1, getShare(masterPoly, 1));
+
+    const masterPoly = generatePolynomial(1, tssPrivKey, genRandomScalar);
+    const tss2 = getShare(masterPoly, inputIndex, ecCurve.n);
+    const serverPoly = generatePolynomial(serverThreshold - 1, getShare(masterPoly, 1, ecCurve.n), genRandomScalar);
 
     // set tssShares on servers
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
         return postEndpoint(endpoint, "/tss_share", {
           label: `${testId}\u0015default\u00160`,
-          tss_share_hex: getShare(serverPoly, i + 1).toString(16, 64),
+          tss_share_hex: getShare(serverPoly, i + 1, ecCurve.n).toString(16, 64),
         }).catch((e) => log.error(e));
       })
     );
@@ -150,10 +153,10 @@ describe("RSS Client", function () {
     const dkg2KeyPair = ecCurve.genKeyPair();
     const dkg2Priv = dkg2KeyPair.getPrivate();
     const dkg2Pub = dkg2KeyPair.getPublic();
-    const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv);
+    const serverPoly2 = generatePolynomial(serverThreshold - 1, dkg2Priv, genRandomScalar);
     await Promise.all(
       serverEndpoints.map((endpoint, i) => {
-        const shareHex = getShare(serverPoly2, i + 1).toString(16, 64);
+        const shareHex = getShare(serverPoly2, i + 1, ecCurve.n).toString(16, 64);
 
         return postEndpoint(endpoint, "/tss_share", {
           label: `${testId}\u0015default\u00161`,
@@ -167,6 +170,7 @@ describe("RSS Client", function () {
       serverPubKeys,
       serverThreshold,
       tssPubKey: hexPoint(tssPubKey),
+      keyType: CURVE,
     });
     const targetIndexes = [2, 3];
     const refreshed = await rssClient.refresh({
@@ -188,6 +192,7 @@ describe("RSS Client", function () {
           serverEncs: r.serverFactorEncs,
           userEnc: r.userFactorEnc,
           selectedServers: [1, 2, 3],
+          keyType: CURVE,
         })
       )
     );
@@ -197,7 +202,7 @@ describe("RSS Client", function () {
     // check that shares are valid
 
     targetIndexes.map((target, i) => {
-      const interpolationLCs = [1, target].map((a) => getLagrangeCoeffs([1, target], a));
+      const interpolationLCs = [1, target].map((a) => getLagrangeCoeff([1, target], a, 0, ecCurve.n));
 
       const shares = [dkg2Priv, tssShares[i]];
 
