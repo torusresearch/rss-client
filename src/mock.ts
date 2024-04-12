@@ -16,10 +16,6 @@ import {
   PointHex,
 } from "./utils";
 
-const { CURVE } = process.env;
-const ecCurve = new EC(CURVE || "secp256k1");
-const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
-
 type AuthData = {
   label: string;
   sigs: string[];
@@ -35,6 +31,7 @@ type RSSRound1Request = {
   user_temp_pubkey: PointHex;
   target_index: number[];
   auth: unknown;
+  key_type: string;
 };
 
 type RSSRound1ResponseData = {
@@ -63,6 +60,7 @@ type RSSRound2Request = {
   server_index: number;
   target_index: number[];
   data: RSSRound2RequestData[];
+  key_type: string;
 };
 
 type RSSRound2ResponseData = {
@@ -73,6 +71,18 @@ type RSSRound2Response = {
   target_index: number[];
   data: RSSRound2ResponseData[];
 };
+
+const CURVE_SECP256K1 = new EC("secp256k1");
+const CURVE_ED25519 = new EC("ed25519");
+
+export function ecFromKeyType(keyType = "secp256k1"): EC {
+  if (keyType === "secp256k1") {
+    return CURVE_SECP256K1;
+  } else if (keyType === "ed25519") {
+    return CURVE_ED25519;
+  }
+  throw new Error(`invalid key type: ${keyType}`);
+}
 
 export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (label: string) => Promise<BN>): Promise<RSSRound1Response> {
   const b = body;
@@ -88,6 +98,9 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
   if (b.server_set === "old" && b.old_user_share_index !== 2 && b.old_user_share_index !== 3) {
     throw new Error("invalid index for user share");
   }
+
+  const ecCurve = ecFromKeyType(b.key_type);
+  const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
   let servers_info: ServersInfo;
   if (b.server_set === "old") {
@@ -200,6 +213,9 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
   const privKeyBuf = Buffer.from(privKeyHex, "hex");
   const data: RSSRound2ResponseData[] = [];
   if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
+
+  const ecCurve = ecFromKeyType(b.key_type);
+
   for (let i = 0; i < b.data.length; i++) {
     const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
     // TODO: check that the same factorPub is not used for multiple shares
@@ -335,6 +351,9 @@ export class MockServer {
       throw new Error("invalid index for user share");
     }
 
+    const ecCurve = ecFromKeyType(b.key_type);
+    const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
+
     let servers_info: ServersInfo;
     if (b.server_set === "old") {
       servers_info = b.old_servers_info;
@@ -446,6 +465,9 @@ export class MockServer {
     const privKeyBuf = Buffer.from(privKeyHex, "hex");
     const data: RSSRound2ResponseData[] = [];
     if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
+
+    const ecCurve = ecFromKeyType(b.key_type);
+
     for (let i = 0; i < b.data.length; i++) {
       const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
       // TODO: check that the same factorPub is not used for multiple shares

@@ -152,8 +152,11 @@ export class RSSClient {
 
   ecCurve: EC;
 
+  keyType: string;
+
   constructor(opts: RSSClientOptions) {
-    this.ecCurve = new EC(opts.keyType || "secp256k1");
+    this.keyType = opts.keyType || "secp256k1";
+    this.ecCurve = new EC(this.keyType);
     this.tssPubKey = ecPoint(this.ecCurve, opts.tssPubKey);
     this.serverEndpoints = opts.serverEndpoints;
     this.serverThreshold = opts.serverThreshold;
@@ -191,6 +194,7 @@ export class RSSClient {
           label: newLabel, // TODO: undesigned
           sigs,
         },
+        key_type: this.keyType,
       });
     });
 
@@ -378,6 +382,7 @@ export class RSSClient {
           server_index: ind,
           target_index: targetIndexes,
           data,
+          key_type: this.keyType,
         }).catch((e) => log.error(e));
       })
     );
@@ -422,6 +427,7 @@ export class RSSClient {
             label: oldLabel,
             sigs,
           },
+          key_type: this.keyType,
         });
       })
       .concat(
@@ -440,6 +446,7 @@ export class RSSClient {
               label: newLabel, // TODO: undesigned
               sigs,
             },
+            key_type: this.keyType,
           });
         })
       );
@@ -627,6 +634,7 @@ export class RSSClient {
           server_index: ind,
           target_index: targetIndexes,
           data,
+          key_type: this.keyType,
         }).catch((e) => log.error(e));
       })
     );
