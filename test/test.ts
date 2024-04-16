@@ -2,12 +2,23 @@ import assert from "assert";
 import { ec as EC } from "elliptic";
 import log from "loglevel";
 
-import { dotProduct, ecCurveSecp256k1, generatePolynomial, getLagrangeCoeff, getShare, hexPoint, postEndpoint, recover, RSSClient } from "../src";
+import {
+  dotProduct,
+  ecCurveSecp256k1,
+  generatePolynomial,
+  getLagrangeCoeff,
+  getShare,
+  hexPoint,
+  KeyType,
+  postEndpoint,
+  recover,
+  RSSClient,
+} from "../src";
 import { MockServer } from "../src/mock";
 
-const { CURVE } = process.env;
+const CURVE = process.env.CURVE as KeyType;
 log.info("CURVE", CURVE);
-const ecCurve = new EC(CURVE || "secp256k1");
+const ecCurve = new EC(CURVE);
 const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
 describe("RSS Client", function () {

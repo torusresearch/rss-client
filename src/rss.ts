@@ -17,6 +17,8 @@ import {
   PointHex,
 } from "./utils";
 
+export type KeyType = "secp256k1" | "ed25519";
+
 export interface IMockServer {
   get(path: string): Promise<unknown>;
   post(path: string, data?: Data): Promise<unknown>;
@@ -62,7 +64,7 @@ export type RSSClientOptions = {
   serverEndpoints: string[] | IMockServer[];
   serverThreshold: number;
   serverPubKeys: PointHex[];
-  keyType: string;
+  keyType: KeyType;
   tempKey?: BN;
 };
 
@@ -124,7 +126,7 @@ export type RecoverOptions = {
   serverEncs: EncryptedMessage[];
   userEnc: EncryptedMessage;
   selectedServers: number[];
-  keyType: string;
+  keyType: KeyType;
 };
 
 export type RecoverResponse = {
@@ -152,10 +154,10 @@ export class RSSClient {
 
   ecCurve: EC;
 
-  keyType: string;
+  keyType: KeyType;
 
   constructor(opts: RSSClientOptions) {
-    this.keyType = opts.keyType || "secp256k1";
+    this.keyType = opts.keyType;
     this.ecCurve = new EC(this.keyType);
     this.tssPubKey = ecPoint(this.ecCurve, opts.tssPubKey);
     this.serverEndpoints = opts.serverEndpoints;
