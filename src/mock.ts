@@ -72,18 +72,6 @@ type RSSRound2Response = {
   data: RSSRound2ResponseData[];
 };
 
-const CURVE_SECP256K1 = new EC("secp256k1");
-const CURVE_ED25519 = new EC("ed25519");
-
-export function ecFromKeyType(keyType = "secp256k1"): EC {
-  if (keyType === "secp256k1") {
-    return CURVE_SECP256K1;
-  } else if (keyType === "ed25519") {
-    return CURVE_ED25519;
-  }
-  throw new Error(`invalid key type: ${keyType}`);
-}
-
 export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (label: string) => Promise<BN>): Promise<RSSRound1Response> {
   const b = body;
   const auth = b.auth as AuthData;
@@ -99,7 +87,7 @@ export async function RSSRound1Handler(body: RSSRound1Request, getTSSShare: (lab
     throw new Error("invalid index for user share");
   }
 
-  const ecCurve = ecFromKeyType(b.key_type);
+  const ecCurve = new EC(b.key_type);
   const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
   let servers_info: ServersInfo;
@@ -214,7 +202,7 @@ export async function RSSRound2Handler(body: RSSRound2Request, getPrivKey: () =>
   const data: RSSRound2ResponseData[] = [];
   if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
 
-  const ecCurve = ecFromKeyType(b.key_type);
+  const ecCurve = new EC(b.key_type);
 
   for (let i = 0; i < b.data.length; i++) {
     const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
@@ -351,7 +339,7 @@ export class MockServer {
       throw new Error("invalid index for user share");
     }
 
-    const ecCurve = ecFromKeyType(b.key_type);
+    const ecCurve = new EC(b.key_type);
     const genRandomScalar = () => ecCurve.genKeyPair().getPrivate();
 
     let servers_info: ServersInfo;
@@ -466,7 +454,7 @@ export class MockServer {
     const data: RSSRound2ResponseData[] = [];
     if (b.round_name !== "rss_round_2") throw new Error("incorrect round name");
 
-    const ecCurve = ecFromKeyType(b.key_type);
+    const ecCurve = new EC(b.key_type);
 
     for (let i = 0; i < b.data.length; i++) {
       const factorPubs: PointHex[] = b.data[i].factor_pubkeys;
