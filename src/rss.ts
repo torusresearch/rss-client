@@ -157,6 +157,7 @@ export class RSSClient {
   keyType: KeyType;
 
   constructor(opts: RSSClientOptions) {
+    if (opts.keyType !== "secp256k1" && opts.keyType !== "ed25519") throw new Error("Invalid keyType, only secp256k1 or ed25519 is supported");
     this.keyType = opts.keyType;
     this.ecCurve = new EC(this.keyType);
     this.tssPubKey = ecPoint(this.ecCurve, opts.tssPubKey);
@@ -658,7 +659,8 @@ export class RSSClient {
 
 export async function recover(opts: RecoverOptions): Promise<RecoverResponse> {
   const { factorKey, serverEncs, userEnc, selectedServers, keyType } = opts;
-  const ecCurve = new EC(keyType || "secp256k1");
+  if (opts.keyType !== "secp256k1" && opts.keyType !== "ed25519") throw new Error("Invalid keyType, only secp256k1 or ed25519 is supported");
+  const ecCurve = new EC(keyType);
   const factorKeyBuf = Buffer.from(factorKey.toString(16, 64), "hex");
   const prom1 = decrypt(factorKeyBuf, userEnc).then((buf) => new BN(buf));
   const prom2 = Promise.all(serverEncs.map((serverEnc) => serverEnc && decrypt(factorKeyBuf, serverEnc).then((buf) => new BN(buf))));

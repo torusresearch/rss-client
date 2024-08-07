@@ -2,7 +2,7 @@
 import BN from "bn.js";
 import { ec as EC } from "elliptic";
 
-import { ServersInfo } from "./rss";
+import { KeyType, ServersInfo } from "./rss";
 import {
   decrypt,
   ecCurveSecp256k1,
@@ -31,7 +31,7 @@ type RSSRound1Request = {
   user_temp_pubkey: PointHex;
   target_index: number[];
   auth: unknown;
-  key_type: string;
+  key_type: KeyType;
 };
 
 type RSSRound1ResponseData = {
@@ -60,7 +60,7 @@ type RSSRound2Request = {
   server_index: number;
   target_index: number[];
   data: RSSRound2RequestData[];
-  key_type: string;
+  key_type: KeyType;
 };
 
 type RSSRound2ResponseData = {
