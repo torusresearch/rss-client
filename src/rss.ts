@@ -3,10 +3,11 @@ import BN from "bn.js";
 import { curve, ec as EC } from "elliptic";
 import log from "loglevel";
 
+import { hexToBigInt } from "./helpers";
 import { importClientRound1, importClientRound2 } from "./importProcess";
 import { refreshClientRound1, refreshClientRound2 } from "./refreshProcess";
+import { refreshClientRound1_ed25519, refreshClientRound2_ed25519 } from "./refreshProcess_ed25519";
 import { decrypt, dotProduct, ecCurveSecp256k1, ecPoint, EncryptedMessage, getLagrangeCoeff, hexPoint, PointHex } from "./utils";
-import { hexToBigInt } from "./helpers";
 
 export type KeyType = "secp256k1" | "ed25519";
 
@@ -317,14 +318,24 @@ export class RSSClient {
         })
       );
 
-    const _data = await refreshClientRound1({
-      inputIndex,
-      targetIndexes,
-      inputShare: hexToBigInt(inputShare.toString("hex")),
-      serversInfo,
-      tempPubKey: Buffer.from(this.tempPubKey.encode("hex", false), "hex"),
-      keyType: this.keyType,
-    });
+    const _data =
+      this.keyType === "secp256k1"
+        ? await refreshClientRound1({
+            inputIndex,
+            targetIndexes,
+            inputShare: hexToBigInt(inputShare.toString("hex")),
+            serversInfo,
+            tempPubKey: Buffer.from(this.tempPubKey.encode("hex", false), "hex"),
+            keyType: this.keyType,
+          })
+        : await refreshClientRound1_ed25519({
+            inputIndex,
+            targetIndexes,
+            inputShare: hexToBigInt(inputShare.toString("hex")),
+            serversInfo,
+            tempPubKey: Buffer.from(this.tempPubKey.encode("hex", false), "hex"),
+            keyType: this.keyType,
+          });
 
     // add front end generated hierarchical sharing to the list
     rssRound1Proms.push(
@@ -339,18 +350,30 @@ export class RSSClient {
     // await responses
     const rssRound1Responses = (await Promise.all(rssRound1Proms)) as RSSRound1Response[];
 
-    const { sums, serverEncs, userFactorEncs } = await refreshClientRound2({
-      targetIndexes,
-      rssRound1Responses,
-      serverThreshold: this.serverThreshold,
-      serverEndpoints: this.serverEndpoints,
-      factorPubs,
-      tempPrivKey: this.tempPrivKey,
-      dkgNewPub,
-      tssPubKey: hexPoint(this.tssPubKey),
-      keyType: this.keyType,
-    });
-
+    const { sums, serverEncs, userFactorEncs } =
+      this.keyType === "secp256k1"
+        ? await refreshClientRound2({
+            targetIndexes,
+            rssRound1Responses,
+            serverThreshold: this.serverThreshold,
+            serverEndpoints: this.serverEndpoints,
+            factorPubs,
+            tempPrivKey: hexToBigInt(this.tempPrivKey.toString("hex")),
+            dkgNewPub,
+            tssPubKey: hexPoint(this.tssPubKey),
+            keyType: this.keyType,
+          })
+        : await refreshClientRound2_ed25519({
+            targetIndexes,
+            rssRound1Responses,
+            serverThreshold: this.serverThreshold,
+            serverEndpoints: this.serverEndpoints,
+            factorPubs,
+            tempPrivKey: hexToBigInt(this.tempPrivKey.toString("hex")),
+            dkgNewPub,
+            tssPubKey: hexPoint(this.tssPubKey),
+            keyType: this.keyType,
+          });
     // servers sum up their shares and encrypt it for factorPubs
     const serverIndexes = this.serverEndpoints.map((_, i) => i + 1);
     const serverFactorEncs = await Promise.all(
@@ -360,8 +383,8 @@ export class RSSClient {
         targetIndexes.map((_, i) => {
           const { mc, sc } = sums[i];
           const round2RequestData = {
-            master_commits: mc.map(hexPoint),
-            server_commits: sc.map(hexPoint),
+            master_commits: mc,
+            server_commits: sc,
             server_encs: serverEncs[i][ind - 1],
             factor_pubkeys: [factorPubs[i]], // TODO: must we do it like this?
           };

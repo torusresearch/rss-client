@@ -16,8 +16,8 @@
     "build": "torus-scripts build",
     "release": "torus-scripts release",
     "prepack": "npm run build",
-    "test:secp256k1": "CURVE=secp256k1 mocha",
-    "test:ed25519": "CURVE=ed25519 mocha",
+    "test:secp256k1": "CURVE=secp256k1 tsx --tsconfig tsconfig.test.json --test test/test.ts",
+    "test:ed25519": "CURVE=ed25519 tsx --tsconfig tsconfig.test.json --test test/test.ts",
     "test": "npm run test:secp256k1 && npm run test:ed25519",
     "lint:ts": "eslint --fix 'src/**/*.ts'",
     "prepare": "husky install"
@@ -55,6 +55,7 @@
     "prettier": "^3.3.3",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.1",
     "typescript": "^5.5.4"
   },
   "lint-staged": {

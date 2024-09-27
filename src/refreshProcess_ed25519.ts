@@ -1,5 +1,6 @@
-import { AffinePoint, ProjPointType } from "@noble/curves/abstract/weierstrass";
-import { secp256k1 } from "@noble/curves/secp256k1";
+import { ExtPointType } from "@noble/curves/abstract/edwards";
+import { AffinePoint } from "@noble/curves/abstract/weierstrass";
+import { ed25519 } from "@noble/curves/ed25519";
 
 import { bigIntUmod, generatePolynomial, getLagrangeCoeff, getShare, hexToBigInt } from "./helpers";
 import { IData, IMockServer, RSSRound1Response, ServersInfo } from "./rss";
@@ -12,12 +13,12 @@ export const toAffineHex = (affine: AffinePoint<bigint>): AffinePoint<string> =>
   };
 };
 
-export const refreshClientRound1 = async (params: {
+export const refreshClientRound1_ed25519 = async (params: {
   inputIndex: number;
   targetIndexes: number[];
   inputShare: bigint;
   serversInfo: ServersInfo;
-  tempPubKey: Uint8Array; // uncompressed pubke
+  tempPubKey: Uint8Array; // uncompressed pubkey
   keyType: "secp256k1" | "ed25519";
 }) => {
   const { inputIndex, targetIndexes, inputShare, serversInfo, tempPubKey } = params;
@@ -25,13 +26,19 @@ export const refreshClientRound1 = async (params: {
   // front end also generates hierarchical secret sharing
   // - calculate lagrange coeffs
 
-  const ecCurve = secp256k1;
-  const curveN = secp256k1.CURVE.n;
+  const nbCurve = ed25519;
+  const curveN = ed25519.CURVE.n;
 
-  const curveG = new secp256k1.ProjectivePoint(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy, 1n);
+  const curveG = ed25519.ExtendedPoint.fromAffine({ x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy });
 
-  const randomBytes = ecCurve.utils.randomPrivateKey;
+  const randomBytes = nbCurve.utils.randomPrivateKey;
   const generatePrivate = () => hexToBigInt(Buffer.from(randomBytes()).toString("hex"));
+
+  // eslint-disable-next-line no-console
+  console.log("generatePrivate", generatePrivate());
+
+  // eslint-disable-next-line no-console
+  console.log("curveN", curveN);
 
   const _L = getLagrangeCoeff([1, inputIndex], inputIndex, 0, curveN);
   const _finalLagrangeCoeffs = targetIndexes.map((target) => _L * bigIntUmod(getLagrangeCoeff([0, 1], 0, target, curveN), curveN));
@@ -44,6 +51,8 @@ export const refreshClientRound1 = async (params: {
   for (let i = 0; i < _finalLagrangeCoeffs.length; i++) {
     const _lc = _finalLagrangeCoeffs[i];
     const _m = generatePolynomial(1, bigIntUmod(_lc * inputShare, curveN), generateRandomScalar);
+    // eslint-disable-next-line no-console
+    console.log(_m);
     _masterPolys.push(_m);
     _masterPolyCommits.push(
       _m.map((coeff) => {
@@ -100,7 +109,7 @@ export const refreshClientRound1 = async (params: {
   return _data;
 };
 
-export const refreshClientRound2 = async (opts: {
+export const refreshClientRound2_ed25519 = async (opts: {
   targetIndexes: number[];
   rssRound1Responses: RSSRound1Response[];
   serverThreshold: number;
@@ -116,16 +125,16 @@ export const refreshClientRound2 = async (opts: {
   // eslint-disable-next-line no-console
   console.log(keyType);
 
-  const ecCurve = secp256k1;
-  const curveN = ecCurve.CURVE.n;
-  const curveG = { x: ecCurve.CURVE.Gx, y: ecCurve.CURVE.Gy };
-  type Point = ProjPointType<bigint>;
+  const nbCurve = ed25519;
+  const curveN = nbCurve.CURVE.n;
+  const curveG = { x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy };
+  type Point = ExtPointType;
 
   const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
     if (typeof p.x === "bigint" && typeof p.y === "bigint") {
-      return secp256k1.ProjectivePoint.fromAffine({ x: p.x, y: p.y });
+      return nbCurve.ExtendedPoint.fromAffine({ x: p.x, y: p.y });
     } else if (typeof p.x === "string" && typeof p.y === "string") {
-      return secp256k1.ProjectivePoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
+      return nbCurve.ExtendedPoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
     }
   };
 

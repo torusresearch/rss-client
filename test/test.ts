@@ -1,3 +1,5 @@
+import { describe, it } from "node:test";
+
 import assert from "assert";
 import { ec as EC } from "elliptic";
 import log from "loglevel";
@@ -33,7 +35,7 @@ describe("RSS Client", function () {
   //     "http://localhost:7075",
   //   ];
   // });
-  it("#should return correct values for import", async function () {
+  it("#should return correct values for import", {}, async function () {
     const testId = "test@test.com\u001cgoogle";
 
     const factorKeyPairs = [ecCurveSecp256k1.genKeyPair(), ecCurveSecp256k1.genKeyPair()];
@@ -118,10 +120,10 @@ describe("RSS Client", function () {
       return null;
     });
 
-    return true;
+    // return true;
   });
 
-  it("#should return correct values for refresh", async function () {
+  it("#should return correct values for refresh", {}, async function () {
     const testId = "test@test.com\u001cgoogle";
 
     const factorKeyPairs = [ecCurveSecp256k1.genKeyPair(), ecCurveSecp256k1.genKeyPair()];
@@ -224,6 +226,6 @@ describe("RSS Client", function () {
       return null;
     });
 
-    return true;
+    // return true;
   });
 });
