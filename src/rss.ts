@@ -6,6 +6,7 @@ import log from "loglevel";
 import { importClientRound1, importClientRound2 } from "./importProcess";
 import { refreshClientRound1, refreshClientRound2 } from "./refreshProcess";
 import { decrypt, dotProduct, ecCurveSecp256k1, ecPoint, EncryptedMessage, getLagrangeCoeff, hexPoint, PointHex } from "./utils";
+import { hexToBigInt } from "./helpers";
 
 export type KeyType = "secp256k1" | "ed25519";
 
@@ -319,9 +320,9 @@ export class RSSClient {
     const _data = await refreshClientRound1({
       inputIndex,
       targetIndexes,
-      inputShare,
+      inputShare: hexToBigInt(inputShare.toString("hex")),
       serversInfo,
-      tempPubKey: hexPoint(this.tempPubKey),
+      tempPubKey: Buffer.from(this.tempPubKey.encode("hex", false), "hex"),
       keyType: this.keyType,
     });
 
