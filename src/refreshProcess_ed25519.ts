@@ -32,13 +32,7 @@ export const refreshClientRound1_ed25519 = async (params: {
   const curveG = ed25519.ExtendedPoint.fromAffine({ x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy });
 
   const randomBytes = nbCurve.utils.randomPrivateKey;
-  const generatePrivate = () => hexToBigInt(Buffer.from(randomBytes()).toString("hex"));
-
-  // eslint-disable-next-line no-console
-  console.log("generatePrivate", generatePrivate());
-
-  // eslint-disable-next-line no-console
-  console.log("curveN", curveN);
+  const generatePrivate = () => bigIntUmod( hexToBigInt(Buffer.from(randomBytes()).toString("hex")), curveN);
 
   const _L = getLagrangeCoeff([1, inputIndex], inputIndex, 0, curveN);
   const _finalLagrangeCoeffs = targetIndexes.map((target) => _L * bigIntUmod(getLagrangeCoeff([0, 1], 0, target, curveN), curveN));
@@ -51,8 +45,6 @@ export const refreshClientRound1_ed25519 = async (params: {
   for (let i = 0; i < _finalLagrangeCoeffs.length; i++) {
     const _lc = _finalLagrangeCoeffs[i];
     const _m = generatePolynomial(1, bigIntUmod(_lc * inputShare, curveN), generateRandomScalar);
-    // eslint-disable-next-line no-console
-    console.log(_m);
     _masterPolys.push(_m);
     _masterPolyCommits.push(
       _m.map((coeff) => {
@@ -121,9 +113,6 @@ export const refreshClientRound2_ed25519 = async (opts: {
   keyType: "secp256k1" | "ed25519";
 }) => {
   const { rssRound1Responses, targetIndexes, serverThreshold, serverEndpoints, factorPubs, tempPrivKey, dkgNewPub, tssPubKey, keyType } = opts;
-
-  // eslint-disable-next-line no-console
-  console.log(keyType);
 
   const nbCurve = ed25519;
   const curveN = nbCurve.CURVE.n;
