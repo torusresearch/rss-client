@@ -32,7 +32,7 @@ export const refreshClientRound1_ed25519 = async (params: {
   const curveG = ed25519.ExtendedPoint.fromAffine({ x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy });
 
   const randomBytes = nbCurve.utils.randomPrivateKey;
-  const generatePrivate = () => bigIntUmod( hexToBigInt(Buffer.from(randomBytes()).toString("hex")), curveN);
+  const generatePrivate = () => bigIntUmod(hexToBigInt(Buffer.from(randomBytes()).toString("hex")), curveN);
 
   const _L = getLagrangeCoeff([1, inputIndex], inputIndex, 0, curveN);
   const _finalLagrangeCoeffs = targetIndexes.map((target) => _L * bigIntUmod(getLagrangeCoeff([0, 1], 0, target, curveN), curveN));
@@ -112,7 +112,7 @@ export const refreshClientRound2_ed25519 = async (opts: {
   tssPubKey: PointHex;
   keyType: "secp256k1" | "ed25519";
 }) => {
-  const { rssRound1Responses, targetIndexes, serverThreshold, serverEndpoints, factorPubs, tempPrivKey, dkgNewPub, tssPubKey, keyType } = opts;
+  const { rssRound1Responses, targetIndexes, serverThreshold, serverEndpoints, factorPubs, tempPrivKey, dkgNewPub, tssPubKey } = opts;
 
   const nbCurve = ed25519;
   const curveN = nbCurve.CURVE.n;
