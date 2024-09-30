@@ -4,9 +4,20 @@ export function hexToBigInt(hex: string): bigint {
   return BigInt(hexWithPrefix);
 }
 
+export function bufferToBigInt(buffer: Buffer): bigint {
+  return hexToBigInt(buffer.toString("hex"));
+}
+
 export function bigIntUmod(a: bigint, m: bigint): bigint {
   // return a % m;
   return ((a % m) + m) % m;
+}
+
+export function bigIntPointToHexPoint(point: { x: bigint; y: bigint }) {
+  return {
+    x: point.x.toString(16).padStart(64, "0"),
+    y: point.y.toString(16).padStart(64, "0"),
+  };
 }
 
 // You'll also need to implement a modular inverse function for BigInt

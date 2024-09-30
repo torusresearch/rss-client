@@ -1,7 +1,9 @@
-import { AffinePoint, ProjPointType } from "@noble/curves/abstract/weierstrass";
+import { Group } from "@noble/curves/abstract/curve";
+import { AffinePoint } from "@noble/curves/abstract/weierstrass";
+import { ed25519 } from "@noble/curves/ed25519";
 import { secp256k1 } from "@noble/curves/secp256k1";
 
-import { bigIntUmod, generatePolynomial, getLagrangeCoeff, getShare, hexToBigInt } from "./helpers";
+import { bigIntPointToHexPoint, bigIntUmod, generatePolynomial, getLagrangeCoeff, getShare, hexToBigInt } from "./helpers";
 import { IData, IMockServer, RSSRound1Response, ServersInfo } from "./rss";
 import { decrypt, encrypt, EncryptedMessage, PointHex } from "./utils";
 
@@ -12,26 +14,25 @@ export const toAffineHex = (affine: AffinePoint<bigint>): AffinePoint<string> =>
   };
 };
 
-export const refreshClientRound1 = async (params: {
+export const refreshClientRound1Internal = async <T extends Group<T> & { x: bigint; y: bigint }>(params: {
   inputIndex: number;
   targetIndexes: number[];
   inputShare: bigint;
   serversInfo: ServersInfo;
   tempPubKey: Uint8Array; // uncompressed pubke
   keyType: "secp256k1" | "ed25519";
+  constructPoint: (p: { x: string; y: string } | { x: bigint; y: bigint }) => T;
+  nbCurve: typeof secp256k1 | typeof ed25519;
 }) => {
-  const { inputIndex, targetIndexes, inputShare, serversInfo, tempPubKey } = params;
+  const { inputIndex, targetIndexes, inputShare, serversInfo, tempPubKey, nbCurve, constructPoint } = params;
 
   // front end also generates hierarchical secret sharing
   // - calculate lagrange coeffs
+  const curveN = nbCurve.CURVE.n;
+  const curveG = constructPoint({ x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy });
 
-  const ecCurve = secp256k1;
-  const curveN = secp256k1.CURVE.n;
-
-  const curveG = new secp256k1.ProjectivePoint(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy, 1n);
-
-  const randomBytes = ecCurve.utils.randomPrivateKey;
-  const generatePrivate = () => hexToBigInt(Buffer.from(randomBytes()).toString("hex"));
+  const randomBytes = nbCurve.utils.randomPrivateKey;
+  const generatePrivate = () => bigIntUmod(hexToBigInt(Buffer.from(randomBytes()).toString("hex")), curveN);
 
   const _L = getLagrangeCoeff([1, inputIndex], inputIndex, 0, curveN);
   const _finalLagrangeCoeffs = targetIndexes.map((target) => _L * bigIntUmod(getLagrangeCoeff([0, 1], 0, target, curveN), curveN));
@@ -100,7 +101,7 @@ export const refreshClientRound1 = async (params: {
   return _data;
 };
 
-export const refreshClientRound2 = async (opts: {
+export const refreshClientRound2Internal = async <T extends Group<T> & { x: bigint; y: bigint }>(opts: {
   targetIndexes: number[];
   rssRound1Responses: RSSRound1Response[];
   serverThreshold: number;
@@ -110,24 +111,26 @@ export const refreshClientRound2 = async (opts: {
   dkgNewPub: PointHex;
   tssPubKey: PointHex;
   keyType: "secp256k1" | "ed25519";
+  constructPoint: (p: { x: string; y: string } | { x: bigint; y: bigint }) => T;
+  nbCurve: typeof secp256k1 | typeof ed25519;
 }) => {
-  const { rssRound1Responses, targetIndexes, serverThreshold, serverEndpoints, factorPubs, tempPrivKey, dkgNewPub, tssPubKey, keyType } = opts;
+  const {
+    rssRound1Responses,
+    targetIndexes,
+    serverThreshold,
+    serverEndpoints,
+    factorPubs,
+    tempPrivKey,
+    dkgNewPub,
+    tssPubKey,
+    nbCurve,
+    constructPoint,
+  } = opts;
 
-  // eslint-disable-next-line no-console
-  console.log(keyType);
+  const curveN = nbCurve.CURVE.n;
+  const curveG = constructPoint({ x: nbCurve.CURVE.Gx, y: nbCurve.CURVE.Gy });
 
-  const ecCurve = secp256k1;
-  const curveN = ecCurve.CURVE.n;
-  const curveG = { x: ecCurve.CURVE.Gx, y: ecCurve.CURVE.Gy };
-  type Point = ProjPointType<bigint>;
-
-  const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
-    if (typeof p.x === "bigint" && typeof p.y === "bigint") {
-      return secp256k1.ProjectivePoint.fromAffine({ x: p.x, y: p.y });
-    } else if (typeof p.x === "string" && typeof p.y === "string") {
-      return secp256k1.ProjectivePoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
-    }
-  };
+  type Point = T;
 
   // sum up all master poly commits and sum up all server poly commits
   const sums = targetIndexes.map((_, i) => {
@@ -184,7 +187,7 @@ export const refreshClientRound2 = async (opts: {
     const userDecs = await Promise.all(userEncs.map((encMsg) => decrypt(privKeyBuffer, encMsg)));
     const userShare = userDecs.map((userDec) => hexToBigInt(userDec.toString("hex"))).reduce((acc, d) => bigIntUmod(acc + d, curveN), BigInt(0));
     const { mc } = sums[i];
-    const gU = constructPoint({ x: curveG.x, y: curveG.y }).multiply(userShare);
+    const gU = curveG.multiply(userShare);
     const _gU = mc[0].add(mc[1].multiply(BigInt(99))); // master poly evaluated at x = 99
     if (!gU.equals(_gU)) throw new Error("decrypted user shares inconsistent with poly commits");
     userShares.push(userShare);
@@ -218,10 +221,88 @@ export const refreshClientRound2 = async (opts: {
 
   return {
     sums: sums.map((s) => ({
-      mc: s.mc.map((p) => toAffineHex(p.toAffine())),
-      sc: s.sc.map((p) => toAffineHex(p.toAffine())),
+      mc: s.mc.map((p) => bigIntPointToHexPoint(p)),
+      sc: s.sc.map((p) => bigIntPointToHexPoint(p)),
     })),
     serverEncs,
     userFactorEncs,
   };
+};
+
+export const refreshClientRound1 = async (params: {
+  inputIndex: number;
+  targetIndexes: number[];
+  inputShare: bigint;
+  serversInfo: ServersInfo;
+  tempPubKey: Uint8Array; // uncompressed pubke
+  keyType: "secp256k1" | "ed25519";
+}) => {
+  if (params.keyType === "secp256k1") {
+    const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
+      if (typeof p.x === "bigint" && typeof p.y === "bigint") {
+        return secp256k1.ProjectivePoint.fromAffine({ x: p.x, y: p.y });
+      } else if (typeof p.x === "string" && typeof p.y === "string") {
+        return secp256k1.ProjectivePoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
+      }
+      throw new Error("Invalid point");
+    };
+    const nbCurve = secp256k1;
+    return refreshClientRound1Internal({
+      ...params,
+      constructPoint,
+      nbCurve,
+    });
+  } else if (params.keyType === "ed25519") {
+    const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
+      if (typeof p.x === "bigint" && typeof p.y === "bigint") {
+        return ed25519.ExtendedPoint.fromAffine({ x: p.x, y: p.y });
+      } else if (typeof p.x === "string" && typeof p.y === "string") {
+        return ed25519.ExtendedPoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
+      }
+      throw new Error("Invalid point");
+    };
+    const nbCurve = ed25519;
+    return refreshClientRound1Internal({
+      ...params,
+      constructPoint,
+      nbCurve,
+    });
+  }
+  throw new Error("Invalid key type");
+};
+
+export const refreshClientRound2 = async (opts: {
+  targetIndexes: number[];
+  rssRound1Responses: RSSRound1Response[];
+  serverThreshold: number;
+  serverEndpoints: string[] | IMockServer[];
+  factorPubs: PointHex[];
+  tempPrivKey: bigint;
+  dkgNewPub: PointHex;
+  tssPubKey: PointHex;
+  keyType: "secp256k1" | "ed25519";
+}) => {
+  if (opts.keyType === "secp256k1") {
+    const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
+      if (typeof p.x === "bigint" && typeof p.y === "bigint") {
+        return secp256k1.ProjectivePoint.fromAffine({ x: p.x, y: p.y });
+      } else if (typeof p.x === "string" && typeof p.y === "string") {
+        return secp256k1.ProjectivePoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
+      }
+      throw new Error("Invalid point");
+    };
+    const nbCurve = secp256k1;
+    return refreshClientRound2Internal({ ...opts, constructPoint, nbCurve });
+  } else if (opts.keyType === "ed25519") {
+    const constructPoint = (p: { x: string; y: string } | { x: bigint; y: bigint }) => {
+      if (typeof p.x === "bigint" && typeof p.y === "bigint") {
+        return ed25519.ExtendedPoint.fromAffine({ x: p.x, y: p.y });
+      } else if (typeof p.x === "string" && typeof p.y === "string") {
+        return ed25519.ExtendedPoint.fromAffine({ x: hexToBigInt(p.x), y: hexToBigInt(p.y) });
+      }
+      throw new Error("Invalid point");
+    };
+    const nbCurve = ed25519;
+    return refreshClientRound2Internal({ ...opts, constructPoint, nbCurve });
+  }
 };
