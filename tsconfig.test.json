@@ -1,0 +1,12 @@
+{
+  "extends": "@toruslabs/config/tsconfig.default.json",
+  "include": ["src", "test"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+  },
+}
