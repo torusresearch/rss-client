@@ -1,3 +1,1 @@
-module.exports = {
-  name: "rssClient",
-};
+module.exports = require("@toruslabs/config/torus.config");

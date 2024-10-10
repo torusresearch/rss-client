@@ -30,7 +30,6 @@
     "@toruslabs/http-helpers": "^7.0.0",
     "bn.js": "^5.2.1",
     "elliptic": "^6.5.7",
-    "fetch": "^1.1.0",
     "loglevel": "^1.9.2"
   },
   "devDependencies": {
@@ -38,7 +37,7 @@
     "@rollup/plugin-replace": "^5.0.7",
     "@toruslabs/config": "^2.2.0",
     "@toruslabs/eslint-config-typescript": "^3.3.3",
-    "@toruslabs/torus-scripts": "^6.1.2",
+    "@toruslabs/torus-scripts": "^6.1.4",
     "@types/elliptic": "^6.4.18",
     "@types/mocha": "^10.0.9",
     "assert": "^2.1.0",
