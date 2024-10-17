@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import BN from "bn.js";
 import { ec as EC } from "elliptic";
 
